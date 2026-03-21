@@ -12,6 +12,10 @@ export default function App() {
     setChecking(false)
   }, [])
 
+  const handleReset = () => {
+    setFamilyId(null)
+  }
+
   if (checking) {
     return (
       <div className="min-h-screen bg-gray-950 flex items-center justify-center">
@@ -24,5 +28,5 @@ export default function App() {
     return <FamilySetup onComplete={(id) => setFamilyId(id)} />
   }
 
-  return <Dashboard familyId={familyId} />
+  return <Dashboard familyId={familyId} onReset={handleReset} />
 }

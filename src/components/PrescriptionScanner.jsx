@@ -9,6 +9,8 @@ export default function PrescriptionScanner({ familyMembers, onDrugsExtracted, o
   const [ocrProgress, setOcrProgress] = useState(0)
   const [extractedDrugs, setExtractedDrugs] = useState([])
   const [selectedMember, setSelectedMember] = useState(familyMembers[0]?.id || "")
+  const [doctorName, setDoctorName] = useState("")
+  const [condition, setCondition] = useState("")
   const [error, setError] = useState(null)
 
   const handleImageUpload = (e) => {
@@ -23,7 +25,6 @@ export default function PrescriptionScanner({ familyMembers, onDrugsExtracted, o
     setStep("scanning")
     setError(null)
     try {
-      // Pass the actual FILE to tesseract, not the blob URL
       const result = await Tesseract.recognize(imageFile, "eng", {
         logger: m => {
           if (m.status === "recognizing text") {
@@ -32,20 +33,16 @@ export default function PrescriptionScanner({ familyMembers, onDrugsExtracted, o
         }
       })
       const rawText = result.data.text
-      console.log("OCR raw text:", rawText)
-
       if (!rawText || rawText.trim().length < 5) {
-        setError("Could not read text from image. Please use a clearer photo.")
+        setError("Could not read text. Please use a clearer photo.")
         setStep("preview")
         return
       }
-
       setStep("parsing")
       const drugs = await parseDrugsFromText(rawText)
       setExtractedDrugs(drugs)
       setStep("confirm")
     } catch (err) {
-      console.error("OCR error:", err)
       setError("Could not read prescription. Please try a clearer image.")
       setStep("preview")
     }
@@ -62,13 +59,19 @@ export default function PrescriptionScanner({ familyMembers, onDrugsExtracted, o
   }
 
   const handleConfirm = () => {
-    onDrugsExtracted(selectedMember, extractedDrugs)
+    // Attach doctor name and condition to every medicine
+    const drugsWithDoctor = extractedDrugs.map(drug => ({
+      ...drug,
+      doctorName: doctorName.trim() || "Unknown Doctor",
+      condition: condition.trim() || "Unknown condition"
+    }))
+    onDrugsExtracted(selectedMember, drugsWithDoctor)
     onClose()
   }
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center z-50 p-4">
-      <div className="bg-gray-900 rounded-2xl w-full max-w-lg border border-gray-700">
+      <div className="bg-gray-900 rounded-2xl w-full max-w-lg border border-gray-700 max-h-screen overflow-y-auto">
 
         <div className="flex items-center justify-between p-5 border-b border-gray-800">
           <h2 className="text-lg font-bold text-white">Scan Prescription</h2>
@@ -131,7 +134,7 @@ export default function PrescriptionScanner({ familyMembers, onDrugsExtracted, o
             <div className="text-center py-8">
               <div className="text-5xl mb-4">🤖</div>
               <p className="text-white font-semibold mb-2">Extracting medicines...</p>
-              <p className="text-gray-500 text-sm">Claude is reading the prescription</p>
+              <p className="text-gray-500 text-sm">Reading the prescription</p>
             </div>
           )}
 
@@ -141,6 +144,7 @@ export default function PrescriptionScanner({ familyMembers, onDrugsExtracted, o
                 ✅ Found {extractedDrugs.length} medicine{extractedDrugs.length !== 1 ? "s" : ""}
               </p>
 
+              {/* Member selector */}
               <div className="mb-4">
                 <label className="block text-xs text-gray-500 mb-2">ADD TO WHICH MEMBER</label>
                 <select
@@ -154,6 +158,31 @@ export default function PrescriptionScanner({ familyMembers, onDrugsExtracted, o
                 </select>
               </div>
 
+              {/* Doctor name */}
+              <div className="mb-4">
+                <label className="block text-xs text-gray-500 mb-2">PRESCRIBING DOCTOR</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Dr. Sharma (Cardiologist)"
+                  value={doctorName}
+                  onChange={e => setDoctorName(e.target.value)}
+                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-red-500"
+                />
+              </div>
+
+              {/* Condition */}
+              <div className="mb-4">
+                <label className="block text-xs text-gray-500 mb-2">PRESCRIBED FOR (CONDITION)</label>
+                <input
+                  type="text"
+                  placeholder="e.g. High blood pressure"
+                  value={condition}
+                  onChange={e => setCondition(e.target.value)}
+                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-red-500"
+                />
+              </div>
+
+              {/* Extracted medicines */}
               <div className="space-y-3 mb-4 max-h-48 overflow-y-auto">
                 {extractedDrugs.map((drug, i) => (
                   <div key={i} className="bg-gray-800 rounded-lg p-3 border border-gray-700">
