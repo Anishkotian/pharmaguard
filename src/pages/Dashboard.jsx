@@ -15,7 +15,7 @@ import MultiDoctorAlert from "../components/MultiDoctorAlert"
 import FamilyMap from "../components/FamilyMap"
 import DuplicateAlert from "../components/DuplicateAlert"
 import SymptomChecker from "./SymptomChecker"
-import MedicineReminder from "../components/MedicineReminder"
+import RemindersManager from "./RemindersManager"
 
 export default function Dashboard({ familyId, onReset }) {
   const [family, setFamily]               = useState(null)
@@ -67,7 +67,7 @@ export default function Dashboard({ familyId, onReset }) {
   }
 
   const handleRemoveMember = async (memberId, memberName) => {
-    if (!window.confirm(`Remove ${memberName} from the family? This will delete all their medicines too.`)) return
+    if (!window.confirm(`Remove ${memberName} from the family?`)) return
     await removeFamilyMember(familyId, memberId)
     await loadFamily()
   }
@@ -79,9 +79,9 @@ export default function Dashboard({ familyId, onReset }) {
     onReset()
   }
 
-  const visibleCross  = crossFamilyAlerts.filter((_, i) => !dismissedCross.includes(i))
-  const visibleMulti  = multiDoctorAlerts.filter((_, i) => !dismissedMulti.includes(i))
-  const totalIssues   = visibleCross.length + visibleMulti.length + duplicates.length
+  const visibleCross = crossFamilyAlerts.filter((_, i) => !dismissedCross.includes(i))
+  const visibleMulti = multiDoctorAlerts.filter((_, i) => !dismissedMulti.includes(i))
+  const totalIssues  = visibleCross.length + visibleMulti.length + duplicates.length
 
   if (loading) {
     return (
@@ -102,8 +102,6 @@ export default function Dashboard({ familyId, onReset }) {
               <h1 className="text-3xl font-bold text-red-500">PharmaGuard</h1>
               <p className="text-gray-400 mt-1 text-sm">{family?.familyName}</p>
             </div>
-
-            {/* Buttons */}
             <div className="flex flex-wrap gap-2 justify-end">
               <button
                 onClick={() => setShowSymptom(true)}
@@ -115,7 +113,7 @@ export default function Dashboard({ familyId, onReset }) {
                 onClick={() => setShowReminder(true)}
                 className="bg-gray-800 hover:bg-gray-700 text-white font-bold px-3 py-2 rounded-xl transition-colors text-xs"
               >
-                ⏰ Reminder
+                ⏰ Reminders
               </button>
               <button
                 onClick={() => setShowScanner(true)}
@@ -139,13 +137,11 @@ export default function Dashboard({ familyId, onReset }) {
               <div className="flex items-center justify-between bg-red-950 border border-red-800 rounded-lg p-4">
                 <div>
                   <p className="text-white font-semibold text-sm">Reset Entire App</p>
-                  <p className="text-gray-400 text-xs mt-1">
-                    Deletes all family data permanently
-                  </p>
+                  <p className="text-gray-400 text-xs mt-1">Deletes all family data permanently</p>
                 </div>
                 <button
                   onClick={handleResetApp}
-                  className="bg-red-600 hover:bg-red-500 text-white text-sm font-bold px-4 py-2 rounded-lg transition-colors"
+                  className="bg-red-600 hover:bg-red-500 text-white text-sm font-bold px-4 py-2 rounded-lg"
                 >
                   Reset
                 </button>
@@ -174,9 +170,7 @@ export default function Dashboard({ familyId, onReset }) {
         {totalIssues === 0 && (
           <div className="bg-green-950 border border-green-800 rounded-xl p-4 mb-6 flex items-center gap-3">
             <span className="text-2xl">✅</span>
-            <p className="text-green-400 font-semibold">
-              No issues detected — your family is safe
-            </p>
+            <p className="text-green-400 font-semibold">No issues detected — your family is safe</p>
           </div>
         )}
 
@@ -212,7 +206,7 @@ export default function Dashboard({ familyId, onReset }) {
           ))}
         </div>
 
-        {/* ── OVERVIEW TAB ── */}
+        {/* ── OVERVIEW ── */}
         {activeTab === "overview" && (
           <FamilyMap
             members={family?.members || []}
@@ -220,7 +214,7 @@ export default function Dashboard({ familyId, onReset }) {
           />
         )}
 
-        {/* ── ALERTS TAB ── */}
+        {/* ── ALERTS ── */}
         {activeTab === "alerts" && (
           <div>
             {visibleCross.length === 0 ? (
@@ -240,7 +234,7 @@ export default function Dashboard({ familyId, onReset }) {
           </div>
         )}
 
-        {/* ── MULTI DOCTOR TAB ── */}
+        {/* ── MULTI DOCTOR ── */}
         {activeTab === "multi-doctor" && (
           <div>
             <p className="text-gray-500 text-sm mb-4">
@@ -263,7 +257,7 @@ export default function Dashboard({ familyId, onReset }) {
           </div>
         )}
 
-        {/* ── DUPLICATES TAB ── */}
+        {/* ── DUPLICATES ── */}
         {activeTab === "duplicates" && (
           <div>
             {duplicates.length === 0 ? (
@@ -279,15 +273,11 @@ export default function Dashboard({ familyId, onReset }) {
           </div>
         )}
 
-        {/* ── MEDICINES TAB ── */}
+        {/* ── MEDICINES ── */}
         {activeTab === "medicines" && (
           <div className="space-y-4">
             {family?.members.map(member => (
-              <div
-                key={member.id}
-                className="bg-gray-900 border border-gray-800 rounded-xl p-5"
-              >
-                {/* Member Header */}
+              <div key={member.id} className="bg-gray-900 border border-gray-800 rounded-xl p-5">
                 <div className="flex items-start justify-between mb-3 gap-2">
                   <div>
                     <h2 className="text-lg font-semibold text-white">{member.name}</h2>
@@ -315,24 +305,18 @@ export default function Dashboard({ familyId, onReset }) {
                   </div>
                 </div>
 
-                {/* Medicine List */}
                 {member.medicines.length === 0 ? (
                   <p className="text-sm text-gray-600 italic">No medicines added yet</p>
                 ) : (
                   <div className="space-y-2">
                     {member.medicines.map((med, i) => (
-                      <div
-                        key={i}
-                        className="bg-gray-800 rounded-lg px-4 py-3 flex items-start justify-between gap-2"
-                      >
+                      <div key={i} className="bg-gray-800 rounded-lg px-4 py-3 flex items-start justify-between gap-2">
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center justify-between gap-2 flex-wrap">
                             <p className="text-sm font-medium text-white">{med.brandName}</p>
                             <span className="text-xs text-gray-600 font-mono">{med.genericName}</span>
                           </div>
-                          <p className="text-xs text-gray-500 mt-1">
-                            {med.dose} · {med.frequency}
-                          </p>
+                          <p className="text-xs text-gray-500 mt-1">{med.dose} · {med.frequency}</p>
                           {med.doctorName && (
                             <p className="text-xs text-orange-400 mt-1">
                               👨‍⚕️ {med.doctorName} · {med.condition}
@@ -342,10 +326,7 @@ export default function Dashboard({ familyId, onReset }) {
                         <button
                           onClick={() => handleRemoveMedicine(member.id, i)}
                           className="text-gray-600 hover:text-red-500 text-xl font-bold flex-shrink-0"
-                          title="Remove medicine"
-                        >
-                          ×
-                        </button>
+                        >×</button>
                       </div>
                     ))}
                   </div>
@@ -365,16 +346,14 @@ export default function Dashboard({ familyId, onReset }) {
           onClose={() => setShowScanner(false)}
         />
       )}
-
       {showSymptom && (
         <SymptomChecker
           members={family?.members || []}
           onClose={() => setShowSymptom(false)}
         />
       )}
-
       {showReminder && (
-        <MedicineReminder
+        <RemindersManager
           members={family?.members || []}
           onClose={() => setShowReminder(false)}
         />

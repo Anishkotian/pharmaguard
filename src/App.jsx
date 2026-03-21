@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react"
 import FamilySetup from "./pages/FamilySetup"
 import Dashboard from "./pages/Dashboard"
+import { restoreReminders } from "./services/reminderScheduler"
 
 export default function App() {
   const [familyId, setFamilyId] = useState(null)
@@ -10,11 +11,10 @@ export default function App() {
     const saved = localStorage.getItem("pharmaguard_family_id")
     if (saved) setFamilyId(saved)
     setChecking(false)
+    restoreReminders()
   }, [])
 
-  const handleReset = () => {
-    setFamilyId(null)
-  }
+  const handleReset = () => setFamilyId(null)
 
   if (checking) {
     return (
