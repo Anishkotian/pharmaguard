@@ -2,22 +2,27 @@ import { useState } from "react"
 import { checkSymptom } from "../services/symptomChecker"
 
 export default function SymptomChecker({ members, onClose }) {
-  const [symptom, setSymptom] = useState("")
-  const [results, setResults] = useState([])
+  const [symptom, setSymptom]   = useState("")
+  const [results, setResults]   = useState([])
   const [searched, setSearched] = useState(false)
+  const [loading, setLoading]   = useState(false)
 
-  const handleSearch = () => {
-    if (!symptom.trim()) return
-    const found = checkSymptom(symptom, members)
-    setResults(found)
+  const handleSearch = async (searchTerm) => {
+    const term = searchTerm || symptom
+    if (!term.trim()) return
+    setSymptom(term)
     setSearched(true)
+    setResults([])
+    setLoading(true)
+    const found = await checkSymptom(term, members, true)
+    setResults(found)
+    setLoading(false)
   }
 
   const handleKeyPress = (e) => {
     if (e.key === "Enter") handleSearch()
   }
 
-  // Common symptom suggestions
   const suggestions = [
     "dry cough", "muscle pain", "dizziness", "fatigue",
     "nausea", "headache", "ankle swelling", "bruising",
@@ -31,15 +36,12 @@ export default function SymptomChecker({ members, onClose }) {
         {/* Header */}
         <div className="flex items-center justify-between p-5 border-b border-gray-800">
           <div>
-            <h2 className="text-lg font-bold text-white">Symptom Checker</h2>
+            <h2 className="text-lg font-bold text-white">🤒 Symptom Checker</h2>
             <p className="text-gray-500 text-xs mt-1">
               Check if your medicine is causing your symptom
             </p>
           </div>
-          <button
-            onClick={onClose}
-            className="text-gray-500 hover:text-white text-2xl"
-          >×</button>
+          <button onClick={onClose} className="text-gray-500 hover:text-white text-2xl">×</button>
         </div>
 
         <div className="p-5">
@@ -55,11 +57,23 @@ export default function SymptomChecker({ members, onClose }) {
               className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-red-500"
             />
             <button
-              onClick={handleSearch}
-              className="bg-red-600 hover:bg-red-500 text-white font-bold px-5 rounded-lg transition-colors"
+              onClick={() => handleSearch()}
+              disabled={loading}
+              className="bg-red-600 hover:bg-red-500 disabled:bg-gray-700 text-white font-bold px-5 rounded-lg transition-colors"
             >
-              🔍
+              {loading ? "⏳" : "🔍"}
             </button>
+          </div>
+
+          {/* How it works */}
+          <div className="bg-blue-950 border border-blue-800 rounded-xl p-3 mb-4">
+            <p className="text-blue-400 text-xs font-semibold mb-1">
+              🔍 Powered by Local DB + FDA FAERS
+            </p>
+            <p className="text-gray-400 text-xs">
+              Checks local side effects database first. If not found, searches
+              the FDA's real adverse events database automatically.
+            </p>
           </div>
 
           {/* Suggestions */}
@@ -72,12 +86,7 @@ export default function SymptomChecker({ members, onClose }) {
                 {suggestions.map(s => (
                   <button
                     key={s}
-                    onClick={() => {
-                      setSymptom(s)
-                      const found = checkSymptom(s, members)
-                      setResults(found)
-                      setSearched(true)
-                    }}
+                    onClick={() => handleSearch(s)}
                     className="bg-gray-800 hover:bg-gray-700 text-gray-300 text-xs px-3 py-2 rounded-lg border border-gray-700 transition-colors"
                   >
                     {s}
@@ -87,8 +96,19 @@ export default function SymptomChecker({ members, onClose }) {
             </div>
           )}
 
+          {/* Loading */}
+          {loading && (
+            <div className="text-center py-8">
+              <p className="text-4xl mb-3">⏳</p>
+              <p className="text-white font-semibold mb-1">Checking databases...</p>
+              <p className="text-gray-500 text-sm">
+                Searching local database and FDA FAERS
+              </p>
+            </div>
+          )}
+
           {/* Results */}
-          {searched && (
+          {searched && !loading && (
             <div>
               {results.length === 0 ? (
                 <div className="text-center py-8">
@@ -96,16 +116,13 @@ export default function SymptomChecker({ members, onClose }) {
                   <p className="text-white font-semibold mb-2">
                     No medicine match found
                   </p>
-                  <p className="text-gray-500 text-sm">
+                  <p className="text-gray-500 text-sm mb-4">
                     None of your current medicines are known to cause "{symptom}".
                     Please consult your doctor.
                   </p>
                   <button
-                    onClick={() => {
-                      setSearched(false)
-                      setSymptom("")
-                    }}
-                    className="mt-4 text-red-400 text-sm hover:text-red-300"
+                    onClick={() => { setSearched(false); setSymptom("") }}
+                    className="text-red-400 text-sm hover:text-red-300"
                   >
                     Search another symptom
                   </button>
@@ -113,7 +130,7 @@ export default function SymptomChecker({ members, onClose }) {
               ) : (
                 <div>
                   <p className="text-yellow-400 text-sm font-semibold mb-4">
-                    ⚠️ Found {results.length} possible medicine cause{results.length > 1 ? "s" : ""} for "{symptom}"
+                    ⚠️ Found {results.length} possible cause{results.length > 1 ? "s" : ""} for "{symptom}"
                   </p>
 
                   <div className="space-y-4">
@@ -125,23 +142,30 @@ export default function SymptomChecker({ members, onClose }) {
                         {/* Medicine info */}
                         <div className="flex items-start justify-between mb-3">
                           <div>
-                            <p className="text-white font-bold text-base">
-                              {result.brandName}
-                            </p>
-                            <p className="text-gray-400 text-xs">
+                            <p className="text-white font-bold">{result.brandName}</p>
+                            <p className="text-gray-400 text-xs mt-0.5">
                               {result.genericName} · {result.memberName}
                             </p>
                             <p className="text-gray-500 text-xs">
                               {result.dose} · {result.frequency}
                             </p>
                           </div>
-                          <span className="bg-yellow-900 text-yellow-400 text-xs px-2 py-1 rounded font-mono">
-                            POSSIBLE CAUSE
-                          </span>
+                          <div className="flex flex-col items-end gap-1">
+                            <span className="bg-yellow-900 text-yellow-400 text-xs px-2 py-1 rounded font-mono">
+                              POSSIBLE CAUSE
+                            </span>
+                            <span className={`text-xs px-2 py-1 rounded ${
+                              result.source === "fda"
+                                ? "bg-blue-950 text-blue-400"
+                                : "bg-green-950 text-green-400"
+                            }`}>
+                              {result.source === "fda" ? "🏛️ FDA FAERS" : "✅ Local DB"}
+                            </span>
+                          </div>
                         </div>
 
                         {/* Matched effect */}
-                        <div className="bg-black bg-opacity-40 rounded-lg p-3 mb-3">
+                        <div className="bg-black bg-opacity-40 rounded-lg p-3 mb-2">
                           <p className="text-xs text-gray-500 mb-1 font-mono tracking-widest">
                             KNOWN SIDE EFFECT
                           </p>
@@ -152,12 +176,12 @@ export default function SymptomChecker({ members, onClose }) {
 
                         {/* Timing */}
                         {result.daysSinceStart !== null && (
-                          <div className="bg-black bg-opacity-40 rounded-lg p-3 mb-3">
+                          <div className="bg-black bg-opacity-40 rounded-lg p-3 mb-2">
                             <p className="text-xs text-gray-500 mb-1 font-mono tracking-widest">
                               TIMING
                             </p>
                             <p className="text-gray-300 text-sm">
-                              You started this medicine{" "}
+                              Started{" "}
                               <span className="text-white font-bold">
                                 {result.daysSinceStart} days ago
                               </span>
@@ -174,7 +198,7 @@ export default function SymptomChecker({ members, onClose }) {
                             RECOMMENDATION
                           </p>
                           <p className="text-green-400 text-sm font-semibold">
-                            Talk to your doctor about this before booking tests.
+                            Talk to your doctor before booking tests.
                             Ask if switching medicine would help.
                           </p>
                         </div>
@@ -183,11 +207,7 @@ export default function SymptomChecker({ members, onClose }) {
                   </div>
 
                   <button
-                    onClick={() => {
-                      setSearched(false)
-                      setSymptom("")
-                      setResults([])
-                    }}
+                    onClick={() => { setSearched(false); setSymptom(""); setResults([]) }}
                     className="mt-4 w-full text-gray-500 hover:text-white py-2 text-sm"
                   >
                     Search another symptom

@@ -1,10 +1,10 @@
 import { useState } from "react"
 import { BRAND_TO_GENERIC } from "../data/brandToGeneric"
+import { getGenericName, getCompleteDrugInfo } from "../services/rxNormService"
 import { getGenericFromBrand, getDrugInfo } from "../services/openFDAService"
 
 const normalize = (name) => name.toLowerCase().trim()
 
-// Resolve generic name — local first, then OpenFDA
 const resolveLocalGeneric = (input) => {
   const lower = normalize(input)
   if (BRAND_TO_GENERIC[lower]) return BRAND_TO_GENERIC[lower]
@@ -32,26 +32,38 @@ const suggestions = [
 ]
 
 export default function MedicineComparator({ onClose }) {
-  const [med1, setMed1]         = useState("")
-  const [med2, setMed2]         = useState("")
-  const [result, setResult]     = useState(null)
-  const [loading, setLoading]   = useState(false)
+  const [med1, setMed1]             = useState("")
+  const [med2, setMed2]             = useState("")
+  const [result, setResult]         = useState(null)
+  const [loading, setLoading]       = useState(false)
   const [loadingMsg, setLoadingMsg] = useState("")
 
-  const resolveWithFDA = async (input) => {
-    // Step 1 — try local list first (instant)
+  const resolveWithAllAPIs = async (input) => {
+    // Step 1 — local database (instant)
     const local = resolveLocalGeneric(input)
     if (local) return { generic: local, source: "local", fdaInfo: null }
 
-    // Step 2 — try OpenFDA API
-    setLoadingMsg(`Looking up ${input} in FDA database...`)
-    const fdaGeneric = await getGenericFromBrand(input)
-    if (fdaGeneric) {
-      const fdaInfo = await getDrugInfo(input)
-      return { generic: fdaGeneric, source: "fda", fdaInfo }
-    }
+    // Step 2 — RxNorm (NIH database — most accurate)
+    setLoadingMsg(`Searching RxNorm for ${input}...`)
+    try {
+      const rxNormGeneric = await getGenericName(input)
+      if (rxNormGeneric) {
+        const info = await getCompleteDrugInfo(input)
+        return { generic: rxNormGeneric, source: "rxnorm", fdaInfo: info }
+      }
+    } catch (e) { console.log("RxNorm failed, trying OpenFDA") }
 
-    // Step 3 — return input as fallback
+    // Step 3 — OpenFDA fallback
+    setLoadingMsg(`Searching FDA database for ${input}...`)
+    try {
+      const fdaGeneric = await getGenericFromBrand(input)
+      if (fdaGeneric) {
+        const info = await getDrugInfo(input)
+        return { generic: fdaGeneric, source: "fda", fdaInfo: info }
+      }
+    } catch (e) { console.log("OpenFDA also failed") }
+
+    // Step 4 — not found anywhere
     return { generic: normalize(input), source: "unknown", fdaInfo: null }
   }
 
@@ -60,16 +72,15 @@ export default function MedicineComparator({ onClose }) {
       alert("Please enter both medicine names")
       return
     }
-
     setLoading(true)
     setResult(null)
 
     try {
       setLoadingMsg("Checking Medicine 1...")
-      const result1 = await resolveWithFDA(med1.trim())
+      const result1 = await resolveWithAllAPIs(med1.trim())
 
       setLoadingMsg("Checking Medicine 2...")
-      const result2 = await resolveWithFDA(med2.trim())
+      const result2 = await resolveWithAllAPIs(med2.trim())
 
       const isSame = result1.generic === result2.generic
 
@@ -98,6 +109,13 @@ export default function MedicineComparator({ onClose }) {
     setResult(null)
   }
 
+  const getSourceBadge = (source) => {
+    if (source === "rxnorm") return { text: "🏛️ Found in RxNorm (NIH)", bg: "bg-purple-950 border-purple-800 text-purple-400" }
+    if (source === "fda")    return { text: "🏛️ Found in FDA database", bg: "bg-blue-950 border-blue-800 text-blue-400" }
+    if (source === "local")  return { text: "✅ Found in local database", bg: "bg-green-950 border-green-800 text-green-400" }
+    return { text: "⚠️ Not found — result may be inaccurate", bg: "bg-yellow-950 border-yellow-800 text-yellow-400" }
+  }
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center z-50 p-4">
       <div className="bg-gray-900 rounded-2xl w-full max-w-lg border border-gray-700 max-h-screen overflow-y-auto">
@@ -118,21 +136,21 @@ export default function MedicineComparator({ onClose }) {
           {/* How it works */}
           <div className="bg-blue-950 border border-blue-800 rounded-xl p-3 mb-5">
             <p className="text-blue-400 text-xs font-semibold mb-1">
-              🔍 Powered by OpenFDA Database
+              🔍 3-Layer Database Lookup
             </p>
-            <p className="text-gray-400 text-xs">
-              Checks local Indian brand database first. If not found, searches
-              the FDA's official drug database automatically.
+            <p className="text-gray-400 text-xs leading-5">
+              Checks local Indian brands → RxNorm (NIH) → OpenFDA in order.
+              Works for Indian brands, US brands and generic names.
             </p>
           </div>
 
-          {/* Input Section */}
+          {/* Inputs */}
           <div className="space-y-3 mb-5">
             <div>
               <label className="block text-xs text-gray-500 mb-2">MEDICINE 1</label>
               <input
                 type="text"
-                placeholder="e.g. Crocin, Metformin, Aspirin"
+                placeholder="e.g. Crocin, Metformin, Tylenol"
                 value={med1}
                 onChange={e => { setMed1(e.target.value); setResult(null) }}
                 onKeyDown={e => e.key === "Enter" && handleCompare()}
@@ -150,7 +168,7 @@ export default function MedicineComparator({ onClose }) {
               <label className="block text-xs text-gray-500 mb-2">MEDICINE 2</label>
               <input
                 type="text"
-                placeholder="e.g. Dolo 650, Glucophage, Ecosprin"
+                placeholder="e.g. Dolo 650, Glucophage, Panadol"
                 value={med2}
                 onChange={e => { setMed2(e.target.value); setResult(null) }}
                 onKeyDown={e => e.key === "Enter" && handleCompare()}
@@ -168,7 +186,7 @@ export default function MedicineComparator({ onClose }) {
             {loading ? (
               <span className="flex items-center justify-center gap-2">
                 <span className="animate-spin">⏳</span>
-                <span>{loadingMsg || "Comparing..."}</span>
+                <span className="text-sm">{loadingMsg || "Comparing..."}</span>
               </span>
             ) : "🔍 Compare Medicines"}
           </button>
@@ -225,36 +243,20 @@ export default function MedicineComparator({ onClose }) {
 
                 {/* Med 1 */}
                 <div className="bg-gray-800 border border-gray-700 rounded-xl p-4">
-                  <p className="text-xs text-gray-500 mb-2 font-mono tracking-widest">
-                    MEDICINE 1
-                  </p>
+                  <p className="text-xs text-gray-500 mb-2 font-mono tracking-widest">MEDICINE 1</p>
                   <p className="text-white font-bold mb-2">{result.med1}</p>
+
                   <div className="bg-gray-900 rounded-lg px-3 py-2 mb-2">
                     <p className="text-xs text-gray-500 mb-0.5">MOLECULE</p>
-                    <p className="text-cyan-400 font-bold text-sm uppercase">
-                      {result.generic1}
-                    </p>
+                    <p className="text-cyan-400 font-bold text-sm uppercase">{result.generic1}</p>
                   </div>
-                  {/* Source badge */}
-                  <div className={`rounded-lg px-3 py-1.5 ${
-                    result.source1 === "fda"
-                      ? "bg-blue-950 border border-blue-800"
-                      : result.source1 === "local"
-                      ? "bg-green-950 border border-green-800"
-                      : "bg-gray-900 border border-gray-700"
-                  }`}>
-                    <p className="text-xs">
-                      {result.source1 === "fda"
-                        ? "🏛️ Found in FDA database"
-                        : result.source1 === "local"
-                        ? "✅ Found in local database"
-                        : "⚠️ Not found in database"
-                      }
-                    </p>
+
+                  <div className={`rounded-lg px-3 py-1.5 border mb-2 ${getSourceBadge(result.source1).bg}`}>
+                    <p className="text-xs">{getSourceBadge(result.source1).text}</p>
                   </div>
-                  {/* FDA extra info */}
+
                   {result.fdaInfo1 && (
-                    <div className="mt-2 space-y-1">
+                    <div className="space-y-1">
                       {result.fdaInfo1.manufacturer && (
                         <div className="bg-gray-900 rounded-lg px-3 py-2">
                           <p className="text-xs text-gray-500 mb-0.5">MANUFACTURER</p>
@@ -275,36 +277,20 @@ export default function MedicineComparator({ onClose }) {
 
                 {/* Med 2 */}
                 <div className="bg-gray-800 border border-gray-700 rounded-xl p-4">
-                  <p className="text-xs text-gray-500 mb-2 font-mono tracking-widest">
-                    MEDICINE 2
-                  </p>
+                  <p className="text-xs text-gray-500 mb-2 font-mono tracking-widest">MEDICINE 2</p>
                   <p className="text-white font-bold mb-2">{result.med2}</p>
+
                   <div className="bg-gray-900 rounded-lg px-3 py-2 mb-2">
                     <p className="text-xs text-gray-500 mb-0.5">MOLECULE</p>
-                    <p className="text-cyan-400 font-bold text-sm uppercase">
-                      {result.generic2}
-                    </p>
+                    <p className="text-cyan-400 font-bold text-sm uppercase">{result.generic2}</p>
                   </div>
-                  {/* Source badge */}
-                  <div className={`rounded-lg px-3 py-1.5 ${
-                    result.source2 === "fda"
-                      ? "bg-blue-950 border border-blue-800"
-                      : result.source2 === "local"
-                      ? "bg-green-950 border border-green-800"
-                      : "bg-gray-900 border border-gray-700"
-                  }`}>
-                    <p className="text-xs">
-                      {result.source2 === "fda"
-                        ? "🏛️ Found in FDA database"
-                        : result.source2 === "local"
-                        ? "✅ Found in local database"
-                        : "⚠️ Not found in database"
-                      }
-                    </p>
+
+                  <div className={`rounded-lg px-3 py-1.5 border mb-2 ${getSourceBadge(result.source2).bg}`}>
+                    <p className="text-xs">{getSourceBadge(result.source2).text}</p>
                   </div>
-                  {/* FDA extra info */}
+
                   {result.fdaInfo2 && (
-                    <div className="mt-2 space-y-1">
+                    <div className="space-y-1">
                       {result.fdaInfo2.manufacturer && (
                         <div className="bg-gray-900 rounded-lg px-3 py-2">
                           <p className="text-xs text-gray-500 mb-0.5">MANUFACTURER</p>
@@ -331,8 +317,10 @@ export default function MedicineComparator({ onClose }) {
                     ⚠️ DO NOT TAKE BOTH
                   </p>
                   <p className="text-gray-300 text-sm leading-6">
-                    Both medicines contain <span className="text-white font-bold uppercase">{result.generic1}</span>.
-                    Taking both together risks overdose. Keep only one and consult your doctor.
+                    Both medicines contain{" "}
+                    <span className="text-white font-bold uppercase">{result.generic1}</span>.
+                    Taking both together risks overdose and liver damage.
+                    Keep only one and consult your doctor.
                   </p>
                 </div>
               )}
@@ -346,20 +334,20 @@ export default function MedicineComparator({ onClose }) {
                   <p className="text-gray-300 text-sm leading-6">
                     These are not duplicates.
                     <span className="text-white font-bold"> {result.generic1.toUpperCase()}</span> and
-                    <span className="text-white font-bold"> {result.generic2.toUpperCase()}</span> are different molecules.
-                    Always check with your doctor before taking both together as they may still interact.
+                    <span className="text-white font-bold"> {result.generic2.toUpperCase()}</span> are
+                    different molecules. Always check with your doctor before taking both together.
                   </p>
                 </div>
               )}
 
-              {/* Not found warning */}
+              {/* Limited data warning */}
               {(result.source1 === "unknown" || result.source2 === "unknown") && (
                 <div className="bg-yellow-950 border border-yellow-800 rounded-xl p-4">
                   <p className="text-xs text-yellow-400 font-mono tracking-widest mb-2">
                     ⚠️ LIMITED DATA
                   </p>
                   <p className="text-gray-300 text-sm">
-                    One or both medicines were not found in our database or the FDA database.
+                    One or both medicines were not found in any database.
                     The result may not be accurate. Please verify with your pharmacist.
                   </p>
                 </div>
