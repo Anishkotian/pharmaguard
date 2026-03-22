@@ -1,81 +1,106 @@
 export default function MultiDoctorAlert({ alert, onDismiss }) {
   const isHigh = alert.severity === "HIGH"
-
   return (
-    <div className={`rounded-xl border p-5 mb-4 relative ${
-      isHigh
-        ? "bg-orange-950 border-orange-700"
-        : "bg-yellow-950 border-yellow-700"
-    }`}>
+    <div style={{
+      background:"rgba(255,107,53,0.08)",
+      border:"1px solid rgba(255,107,53,0.25)",
+      borderRadius:"14px", padding:"16px",
+      marginBottom:"10px", position:"relative", overflow:"hidden"
+    }}>
+      <div style={{
+        position:"absolute", top:0, left:0, right:0, height:"3px",
+        background: isHigh ? "#FF6B35" : "#FFD60A"
+      }}/>
 
-      {/* Top bar */}
-      <div className={`absolute top-0 left-0 right-0 h-1 rounded-t-xl ${
-        isHigh ? "bg-orange-500" : "bg-yellow-500"
-      }`} />
-
-      {/* Header */}
-      <div className="flex items-start justify-between mb-3">
-        <div className="flex items-center gap-2">
-          <span className="text-2xl">👨‍⚕️</span>
-          <div>
-            <p className={`font-bold text-sm font-mono tracking-widest ${
-              isHigh ? "text-orange-400" : "text-yellow-400"
-            }`}>
-              {isHigh ? "HIGH RISK" : "MEDIUM RISK"} — MULTI-DOCTOR CONFLICT
+      <div style={{display:"flex", alignItems:"flex-start", justifyContent:"space-between", gap:"10px", marginBottom:"12px"}}>
+        <div style={{display:"flex", alignItems:"flex-start", gap:"10px", flex:1, minWidth:0}}>
+          <span style={{fontSize:"20px", flexShrink:0}}>👨‍⚕️</span>
+          <div style={{minWidth:0}}>
+            <p style={{
+              color:"#FF6B35", fontWeight:"700", fontSize:"11px",
+              fontFamily:"'JetBrains Mono',monospace",
+              letterSpacing:"0.1em", margin:"0 0 4px",
+              textTransform:"uppercase"
+            }}>
+              {isHigh ? "High Risk" : "Medium Risk"} — Multi-Doctor
             </p>
-            <p className="text-white font-semibold text-base mt-1">
+            <p style={{
+              color:"#EAEEF2", fontWeight:"600",
+              fontSize:"13px", margin:0, lineHeight:"1.4"
+            }}>
               {alert.memberName}'s medicines conflict
             </p>
           </div>
         </div>
         {onDismiss && (
-          <button
-            onClick={onDismiss}
-            className="text-gray-600 hover:text-white text-xl ml-4"
-          >×</button>
+          <button onClick={onDismiss} style={{
+            background:"none", border:"none",
+            color:"#636E7B", cursor:"pointer",
+            fontSize:"18px", flexShrink:0, padding:0
+          }}>×</button>
         )}
       </div>
 
-      {/* Two doctors */}
-      <div className="grid grid-cols-2 gap-3 mb-3">
-        <div className="bg-black bg-opacity-30 rounded-lg p-3">
-          <p className="text-xs text-gray-500 mb-1 font-mono tracking-widest">DOCTOR 1</p>
-          <p className="text-white font-semibold text-sm">{alert.doctor1}</p>
-          <p className="text-gray-400 text-xs mt-1">For: {alert.condition1}</p>
-          <p className="text-orange-300 text-sm font-bold mt-2">{alert.med1}</p>
-        </div>
-        <div className="bg-black bg-opacity-30 rounded-lg p-3">
-          <p className="text-xs text-gray-500 mb-1 font-mono tracking-widest">DOCTOR 2</p>
-          <p className="text-white font-semibold text-sm">{alert.doctor2}</p>
-          <p className="text-gray-400 text-xs mt-1">For: {alert.condition2}</p>
-          <p className="text-orange-300 text-sm font-bold mt-2">{alert.med2}</p>
-        </div>
+      {/* Two doctors side by side */}
+      <div style={{
+        display:"grid", gridTemplateColumns:"1fr 1fr",
+        gap:"8px", marginBottom:"8px"
+      }}>
+        {[
+          {label:"Doctor 1", doctor:alert.doctor1, condition:alert.condition1, med:alert.med1},
+          {label:"Doctor 2", doctor:alert.doctor2, condition:alert.condition2, med:alert.med2},
+        ].map((d, i) => (
+          <div key={i} style={{
+            background:"rgba(0,0,0,0.25)",
+            borderRadius:"10px", padding:"10px"
+          }}>
+            <p style={{
+              color:"#636E7B", fontSize:"9px",
+              fontFamily:"'JetBrains Mono',monospace",
+              letterSpacing:"0.15em", textTransform:"uppercase",
+              margin:"0 0 4px"
+            }}>{d.label}</p>
+            <p style={{color:"#EAEEF2", fontWeight:"600", fontSize:"12px", margin:"0 0 2px"}}>
+              {d.doctor}
+            </p>
+            <p style={{color:"#636E7B", fontSize:"10px", margin:"0 0 4px"}}>
+              For: {d.condition}
+            </p>
+            <p style={{color:"#FF8855", fontWeight:"700", fontSize:"12px", margin:0}}>
+              {d.med}
+            </p>
+          </div>
+        ))}
       </div>
 
-      {/* Neither doctor knows */}
-      <div className="bg-black bg-opacity-30 rounded-lg p-3 mb-3">
-        <p className="text-xs text-gray-500 mb-1 font-mono tracking-widest">THE PROBLEM</p>
-        <p className="text-gray-300 text-sm">
-          <span className="text-orange-400 font-semibold">{alert.doctor1}</span> does not know
-          what <span className="text-orange-400 font-semibold">{alert.doctor2}</span> prescribed —
-          and neither knows about this conflict.
+      <div style={{
+        background:"rgba(0,0,0,0.25)", borderRadius:"10px",
+        padding:"10px 12px", marginBottom:"8px"
+      }}>
+        <p style={{
+          color:"#636E7B", fontSize:"9px",
+          fontFamily:"'JetBrains Mono',monospace",
+          letterSpacing:"0.2em", textTransform:"uppercase", margin:"0 0 4px"
+        }}>Risk</p>
+        <p style={{color:"#EAEEF2", fontSize:"13px", margin:0, lineHeight:"1.5"}}>
+          {alert.effect}
         </p>
       </div>
 
-      {/* Risk */}
-      <div className="bg-black bg-opacity-30 rounded-lg p-3 mb-3">
-        <p className="text-xs text-gray-500 mb-1 font-mono tracking-widest">RISK</p>
-        <p className="text-gray-200 text-sm">{alert.effect}</p>
+      <div style={{
+        background:"rgba(0,0,0,0.25)", borderRadius:"10px",
+        padding:"10px 12px"
+      }}>
+        <p style={{
+          color:"#636E7B", fontSize:"9px",
+          fontFamily:"'JetBrains Mono',monospace",
+          letterSpacing:"0.2em", textTransform:"uppercase", margin:"0 0 4px"
+        }}>Action</p>
+        <p style={{
+          color:"#FF8855", fontSize:"13px",
+          fontWeight:"600", margin:0, lineHeight:"1.5"
+        }}>{alert.action}</p>
       </div>
-
-      {/* Action */}
-      <div className="bg-black bg-opacity-30 rounded-lg p-3">
-        <p className="text-xs text-gray-500 mb-1 font-mono tracking-widest">ACTION</p>
-        <p className={`text-sm font-semibold ${
-          isHigh ? "text-orange-300" : "text-yellow-300"
-        }`}>{alert.action}</p>
-      </div>
-
     </div>
   )
 }
