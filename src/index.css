@@ -1,3 +1,41 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* ── GLOBAL RESPONSIVE BASE ── */
+* {
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html {
+  scroll-behavior: smooth;
+  font-size: 16px;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ── MOBILE TOUCH TARGETS ── */
+button, a, input, select {
+  min-height: 44px;
+}
+
+/* ── SCROLLBAR ── */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: #05070A; }
+::-webkit-scrollbar-thumb { background: #CC2222; border-radius: 4px; }
+
+/* ── PREVENT ZOOM ON INPUT FOCUS (iOS) ── */
+input, select, textarea {
+  font-size: 16px !important;
+}
+
+/* ── SAFE AREA FOR NOTCHED PHONES ── */
+.safe-top    { padding-top:    env(safe-area-inset-top); }
+.safe-bottom { padding-bottom: env(safe-area-inset-bottom); }

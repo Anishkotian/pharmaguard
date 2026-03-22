@@ -1,11 +1,7 @@
 import { useEffect, useState } from "react"
 import {
-  getFamily,
-  addMedicineToMember,
-  removeMedicineFromMember,
-  clearMemberMedicines,
-  removeFamilyMember,
-  deleteFamily
+  getFamily, addMedicineToMember, removeMedicineFromMember,
+  clearMemberMedicines, removeFamilyMember, deleteFamily
 } from "../services/familyService"
 import { checkCrossFamily, checkSamePersonMultiDoctor } from "../services/interactionChecker"
 import { findDuplicates } from "../services/duplicateChecker"
@@ -49,34 +45,33 @@ export default function Dashboard({ familyId, onReset }) {
   const handleDrugsExtracted = async (memberId, drugs) => {
     for (const drug of drugs) {
       await addMedicineToMember(familyId, memberId, {
-        ...drug,
-        startDate: new Date().toISOString().split("T")[0]
+        ...drug, startDate: new Date().toISOString().split("T")[0]
       })
     }
     await loadFamily()
   }
 
-  const handleRemoveMedicine = async (memberId, medicineIndex) => {
+  const handleRemoveMedicine = async (memberId, i) => {
     if (!window.confirm("Remove this medicine?")) return
-    await removeMedicineFromMember(familyId, memberId, medicineIndex)
+    await removeMedicineFromMember(familyId, memberId, i)
     await loadFamily()
   }
 
-  const handleClearMedicines = async (memberId, memberName) => {
-    if (!window.confirm(`Remove ALL medicines from ${memberName}?`)) return
+  const handleClearMedicines = async (memberId, name) => {
+    if (!window.confirm(`Remove ALL medicines from ${name}?`)) return
     await clearMemberMedicines(familyId, memberId)
     await loadFamily()
   }
 
-  const handleRemoveMember = async (memberId, memberName) => {
-    if (!window.confirm(`Remove ${memberName} from the family?`)) return
+  const handleRemoveMember = async (memberId, name) => {
+    if (!window.confirm(`Remove ${name} from the family?`)) return
     await removeFamilyMember(familyId, memberId)
     await loadFamily()
   }
 
   const handleResetApp = async () => {
-    if (!window.confirm("Reset the entire app? This will delete ALL family data permanently.")) return
-    if (!window.confirm("Are you absolutely sure? This cannot be undone.")) return
+    if (!window.confirm("Reset entire app? Deletes ALL data permanently.")) return
+    if (!window.confirm("Are you absolutely sure?")) return
     await deleteFamily(familyId)
     onReset()
   }
@@ -93,85 +88,109 @@ export default function Dashboard({ familyId, onReset }) {
     )
   }
 
-  return (
-    <div className="min-h-screen bg-gray-950 text-white p-4">
-      <div className="max-w-2xl mx-auto">
+  const tabs = ["overview", "alerts", "multi-doctor", "duplicates", "medicines"]
 
-        {/* ── HEADER ── */}
-        <div className="mb-6">
-          <div className="flex items-start justify-between gap-2 flex-wrap">
-            <div>
-              <h1 className="text-3xl font-bold text-red-500">PharmaGuard</h1>
-              <p className="text-gray-400 mt-1 text-sm">{family?.familyName}</p>
+  return (
+    <div className="min-h-screen bg-gray-950 text-white">
+
+      {/* ── HEADER ── */}
+      <div className="sticky top-0 z-40 bg-gray-950 border-b border-gray-800 px-4 py-3 sm:px-6">
+        <div className="max-w-2xl mx-auto">
+          <div className="flex items-center justify-between gap-2">
+            <div className="min-w-0">
+              <h1 className="text-xl sm:text-2xl font-bold text-red-500 truncate"
+                  style={{fontFamily:"'Bebas Neue',sans-serif",letterSpacing:"0.06em"}}>
+                PharmaGuard
+              </h1>
+              <p className="text-gray-500 text-xs truncate">{family?.familyName}</p>
             </div>
 
-            {/* ── ALL BUTTONS ── */}
-            <div className="flex flex-wrap gap-2 justify-end max-w-xs">
-              <button
-                onClick={() => setShowSymptom(true)}
-                className="bg-gray-800 hover:bg-gray-700 text-white font-bold px-3 py-2 rounded-xl transition-colors text-xs"
-              >
+            {/* Desktop buttons */}
+            <div className="hidden sm:flex flex-wrap gap-2 justify-end">
+              <button onClick={() => setShowSymptom(true)}
+                className="bg-gray-800 hover:bg-gray-700 text-white font-bold px-3 py-2 rounded-xl text-xs transition-colors">
                 🤒 Symptom
               </button>
-              <button
-                onClick={() => setShowComparator(true)}
-                className="bg-gray-800 hover:bg-gray-700 text-white font-bold px-3 py-2 rounded-xl transition-colors text-xs"
-              >
+              <button onClick={() => setShowComparator(true)}
+                className="bg-gray-800 hover:bg-gray-700 text-white font-bold px-3 py-2 rounded-xl text-xs transition-colors">
                 💊 Compare
               </button>
-              <button
-                onClick={() => setShowReminder(true)}
-                className="bg-gray-800 hover:bg-gray-700 text-white font-bold px-3 py-2 rounded-xl transition-colors text-xs"
-              >
+              <button onClick={() => setShowReminder(true)}
+                className="bg-gray-800 hover:bg-gray-700 text-white font-bold px-3 py-2 rounded-xl text-xs transition-colors">
                 ⏰ Reminders
               </button>
-              <button
-                onClick={() => setShowScanner(true)}
-                className="bg-red-600 hover:bg-red-500 text-white font-bold px-3 py-2 rounded-xl transition-colors text-xs"
-              >
+              <button onClick={() => setShowScanner(true)}
+                className="bg-red-600 hover:bg-red-500 text-white font-bold px-3 py-2 rounded-xl text-xs transition-colors">
                 📷 Scan
               </button>
-              <button
-                onClick={() => setShowSettings(!showSettings)}
-                className="bg-gray-800 hover:bg-gray-700 text-white font-bold px-3 py-2 rounded-xl transition-colors text-xs"
-              >
+              <button onClick={() => setShowSettings(!showSettings)}
+                className="bg-gray-800 hover:bg-gray-700 text-white font-bold px-3 py-2 rounded-xl text-xs transition-colors">
                 ⚙️
+              </button>
+            </div>
+
+            {/* Mobile — show only scan + menu */}
+            <div className="flex sm:hidden gap-2">
+              <button onClick={() => setShowScanner(true)}
+                className="bg-red-600 hover:bg-red-500 text-white font-bold px-3 py-2 rounded-xl text-xs transition-colors">
+                📷 Scan
+              </button>
+              <button onClick={() => setShowSettings(!showSettings)}
+                className="bg-gray-800 text-white font-bold px-3 py-2 rounded-xl text-xs">
+                ☰
               </button>
             </div>
           </div>
 
-          {/* Settings Panel */}
+          {/* Settings / Mobile menu */}
           {showSettings && (
-            <div className="bg-gray-900 border border-gray-700 rounded-xl p-5 mt-4">
-              <h3 className="text-white font-bold mb-4">Settings</h3>
-              <div className="flex items-center justify-between bg-red-950 border border-red-800 rounded-lg p-4">
+            <div className="mt-3 bg-gray-900 border border-gray-700 rounded-xl p-4">
+
+              {/* Mobile action buttons */}
+              <div className="grid grid-cols-3 gap-2 mb-4 sm:hidden">
+                <button onClick={() => { setShowSymptom(true); setShowSettings(false) }}
+                  className="bg-gray-800 text-white font-bold py-3 rounded-xl text-xs text-center">
+                  🤒<br/>Symptom
+                </button>
+                <button onClick={() => { setShowComparator(true); setShowSettings(false) }}
+                  className="bg-gray-800 text-white font-bold py-3 rounded-xl text-xs text-center">
+                  💊<br/>Compare
+                </button>
+                <button onClick={() => { setShowReminder(true); setShowSettings(false) }}
+                  className="bg-gray-800 text-white font-bold py-3 rounded-xl text-xs text-center">
+                  ⏰<br/>Reminders
+                </button>
+              </div>
+
+              {/* Reset */}
+              <div className="flex items-center justify-between bg-red-950 border border-red-800 rounded-lg p-3">
                 <div>
                   <p className="text-white font-semibold text-sm">Reset Entire App</p>
-                  <p className="text-gray-400 text-xs mt-1">
-                    Deletes all family data permanently
-                  </p>
+                  <p className="text-gray-400 text-xs mt-0.5">Deletes all family data permanently</p>
                 </div>
-                <button
-                  onClick={handleResetApp}
-                  className="bg-red-600 hover:bg-red-500 text-white text-sm font-bold px-4 py-2 rounded-lg"
-                >
+                <button onClick={handleResetApp}
+                  className="bg-red-600 hover:bg-red-500 text-white text-xs font-bold px-3 py-2 rounded-lg ml-3 flex-shrink-0">
                   Reset
                 </button>
               </div>
             </div>
           )}
         </div>
+      </div>
 
-        {/* ── ISSUE SUMMARY ── */}
+      {/* ── MAIN CONTENT ── */}
+      <div className="max-w-2xl mx-auto px-4 py-4 sm:px-6 sm:py-6">
+
+        {/* Issue Summary */}
         {totalIssues > 0 && (
-          <div className="bg-red-950 border border-red-800 rounded-xl p-4 mb-6">
+          <div className="bg-red-950 border border-red-800 rounded-xl p-4 mb-4">
             <div className="flex items-center gap-3">
-              <span className="text-3xl">🚨</span>
+              <span className="text-2xl sm:text-3xl">🚨</span>
               <div>
-                <p className="text-red-400 font-bold">
+                <p className="text-red-400 font-bold text-sm sm:text-base">
                   {totalIssues} Issue{totalIssues > 1 ? "s" : ""} Found
                 </p>
-                <p className="text-gray-400 text-sm">
+                <p className="text-gray-400 text-xs">
                   {visibleCross.length} cross-family · {visibleMulti.length} multi-doctor · {duplicates.length} duplicate{duplicates.length !== 1 ? "s" : ""}
                 </p>
               </div>
@@ -180,27 +199,25 @@ export default function Dashboard({ familyId, onReset }) {
         )}
 
         {totalIssues === 0 && (
-          <div className="bg-green-950 border border-green-800 rounded-xl p-4 mb-6 flex items-center gap-3">
-            <span className="text-2xl">✅</span>
-            <p className="text-green-400 font-semibold">
-              No issues detected — your family is safe
-            </p>
+          <div className="bg-green-950 border border-green-800 rounded-xl p-4 mb-4 flex items-center gap-3">
+            <span className="text-xl">✅</span>
+            <p className="text-green-400 font-semibold text-sm">No issues detected — your family is safe</p>
           </div>
         )}
 
-        {/* ── TABS ── */}
-        <div className="flex gap-2 mb-6 flex-wrap">
-          {["overview", "alerts", "multi-doctor", "duplicates", "medicines"].map(tab => (
+        {/* Tabs — horizontal scroll on mobile */}
+        <div className="flex gap-2 mb-5 overflow-x-auto pb-1 -mx-4 px-4 sm:mx-0 sm:px-0 sm:flex-wrap">
+          {tabs.map(tab => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
-              className={`px-3 py-2 rounded-lg text-xs font-semibold capitalize transition-colors ${
+              className={`flex-shrink-0 px-3 py-2 rounded-lg text-xs font-semibold capitalize transition-colors ${
                 activeTab === tab
                   ? "bg-red-600 text-white"
                   : "bg-gray-900 text-gray-400 hover:text-white"
               }`}
             >
-              {tab === "multi-doctor" ? "👨‍⚕️ Multi-Doctor" : tab}
+              {tab === "multi-doctor" ? "👨‍⚕️ Multi" : tab}
               {tab === "alerts" && visibleCross.length > 0 && (
                 <span className="ml-1 bg-red-800 text-red-200 text-xs px-1.5 py-0.5 rounded-full">
                   {visibleCross.length}
@@ -220,15 +237,12 @@ export default function Dashboard({ familyId, onReset }) {
           ))}
         </div>
 
-        {/* ── OVERVIEW TAB ── */}
+        {/* Overview */}
         {activeTab === "overview" && (
-          <FamilyMap
-            members={family?.members || []}
-            alerts={[...crossFamilyAlerts, ...multiDoctorAlerts]}
-          />
+          <FamilyMap members={family?.members || []} alerts={[...crossFamilyAlerts, ...multiDoctorAlerts]} />
         )}
 
-        {/* ── ALERTS TAB ── */}
+        {/* Alerts */}
         {activeTab === "alerts" && (
           <div>
             {visibleCross.length === 0 ? (
@@ -236,19 +250,13 @@ export default function Dashboard({ familyId, onReset }) {
                 <p className="text-4xl mb-3">✅</p>
                 <p>No cross-family interactions detected</p>
               </div>
-            ) : (
-              visibleCross.map((alert, i) => (
-                <AlertCard
-                  key={i}
-                  alert={alert}
-                  onDismiss={() => setDismissedCross([...dismissedCross, i])}
-                />
-              ))
-            )}
+            ) : visibleCross.map((alert, i) => (
+              <AlertCard key={i} alert={alert} onDismiss={() => setDismissedCross([...dismissedCross, i])} />
+            ))}
           </div>
         )}
 
-        {/* ── MULTI DOCTOR TAB ── */}
+        {/* Multi Doctor */}
         {activeTab === "multi-doctor" && (
           <div>
             <p className="text-gray-500 text-sm mb-4">
@@ -259,19 +267,13 @@ export default function Dashboard({ familyId, onReset }) {
                 <p className="text-4xl mb-3">✅</p>
                 <p>No multi-doctor conflicts detected</p>
               </div>
-            ) : (
-              visibleMulti.map((alert, i) => (
-                <MultiDoctorAlert
-                  key={i}
-                  alert={alert}
-                  onDismiss={() => setDismissedMulti([...dismissedMulti, i])}
-                />
-              ))
-            )}
+            ) : visibleMulti.map((alert, i) => (
+              <MultiDoctorAlert key={i} alert={alert} onDismiss={() => setDismissedMulti([...dismissedMulti, i])} />
+            ))}
           </div>
         )}
 
-        {/* ── DUPLICATES TAB ── */}
+        {/* Duplicates */}
         {activeTab === "duplicates" && (
           <div>
             {duplicates.length === 0 ? (
@@ -279,44 +281,33 @@ export default function Dashboard({ familyId, onReset }) {
                 <p className="text-4xl mb-3">✅</p>
                 <p>No duplicate medicines detected</p>
               </div>
-            ) : (
-              duplicates.map((dup, i) => (
-                <DuplicateAlert key={i} duplicate={dup} />
-              ))
-            )}
+            ) : duplicates.map((dup, i) => (
+              <DuplicateAlert key={i} duplicate={dup} />
+            ))}
           </div>
         )}
 
-        {/* ── MEDICINES TAB ── */}
+        {/* Medicines */}
         {activeTab === "medicines" && (
           <div className="space-y-4">
             {family?.members.map(member => (
-              <div
-                key={member.id}
-                className="bg-gray-900 border border-gray-800 rounded-xl p-5"
-              >
+              <div key={member.id} className="bg-gray-900 border border-gray-800 rounded-xl p-4 sm:p-5">
                 <div className="flex items-start justify-between mb-3 gap-2">
-                  <div>
-                    <h2 className="text-lg font-semibold text-white">{member.name}</h2>
+                  <div className="min-w-0">
+                    <h2 className="text-base sm:text-lg font-semibold text-white truncate">{member.name}</h2>
                     <p className="text-sm text-gray-500">Age {member.age}</p>
                   </div>
-                  <div className="flex items-center gap-2 flex-wrap justify-end">
-                    <span className="text-2xl font-bold text-green-400">
-                      {member.medicines.length}
-                    </span>
-                    <span className="text-xs text-gray-600">medicines</span>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <span className="text-xl sm:text-2xl font-bold text-green-400">{member.medicines.length}</span>
+                    <span className="text-xs text-gray-600">meds</span>
                     {member.medicines.length > 0 && (
-                      <button
-                        onClick={() => handleClearMedicines(member.id, member.name)}
-                        className="text-xs text-yellow-500 hover:text-yellow-400 border border-yellow-800 px-2 py-1 rounded-lg"
-                      >
-                        Clear All
+                      <button onClick={() => handleClearMedicines(member.id, member.name)}
+                        className="text-xs text-yellow-500 border border-yellow-800 px-2 py-1 rounded-lg">
+                        Clear
                       </button>
                     )}
-                    <button
-                      onClick={() => handleRemoveMember(member.id, member.name)}
-                      className="text-xs text-red-500 hover:text-red-400 border border-red-800 px-2 py-1 rounded-lg"
-                    >
+                    <button onClick={() => handleRemoveMember(member.id, member.name)}
+                      className="text-xs text-red-500 border border-red-800 px-2 py-1 rounded-lg">
                       Remove
                     </button>
                   </div>
@@ -327,30 +318,21 @@ export default function Dashboard({ familyId, onReset }) {
                 ) : (
                   <div className="space-y-2">
                     {member.medicines.map((med, i) => (
-                      <div
-                        key={i}
-                        className="bg-gray-800 rounded-lg px-4 py-3 flex items-start justify-between gap-2"
-                      >
+                      <div key={i} className="bg-gray-800 rounded-lg px-3 py-2.5 flex items-start justify-between gap-2">
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-center justify-between gap-2 flex-wrap">
+                          <div className="flex items-start justify-between gap-1 flex-wrap">
                             <p className="text-sm font-medium text-white">{med.brandName}</p>
-                            <span className="text-xs text-gray-600 font-mono">
-                              {med.genericName}
-                            </span>
+                            <span className="text-xs text-gray-600 font-mono flex-shrink-0">{med.genericName}</span>
                           </div>
-                          <p className="text-xs text-gray-500 mt-1">
-                            {med.dose} · {med.frequency}
-                          </p>
+                          <p className="text-xs text-gray-500 mt-0.5">{med.dose} · {med.frequency}</p>
                           {med.doctorName && (
-                            <p className="text-xs text-orange-400 mt-1">
-                              👨‍⚕️ {med.doctorName} · {med.condition}
-                            </p>
+                            <p className="text-xs text-orange-400 mt-0.5">👨‍⚕️ {med.doctorName}</p>
                           )}
                         </div>
-                        <button
-                          onClick={() => handleRemoveMedicine(member.id, i)}
-                          className="text-gray-600 hover:text-red-500 text-xl font-bold flex-shrink-0"
-                        >×</button>
+                        <button onClick={() => handleRemoveMedicine(member.id, i)}
+                          className="text-gray-600 hover:text-red-500 text-xl font-bold flex-shrink-0 w-8 h-8 flex items-center justify-center">
+                          ×
+                        </button>
                       </div>
                     ))}
                   </div>
@@ -362,30 +344,53 @@ export default function Dashboard({ familyId, onReset }) {
 
       </div>
 
+      {/* ── BOTTOM NAV (mobile only) ── */}
+      <div className="fixed bottom-0 left-0 right-0 sm:hidden bg-gray-950 border-t border-gray-800 safe-bottom">
+        <div className="flex">
+          {tabs.map(tab => (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className={`flex-1 py-3 text-center transition-colors ${
+                activeTab === tab ? "text-red-500" : "text-gray-600"
+              }`}
+            >
+              <div className="text-lg">
+                {tab === "overview"     && "🏠"}
+                {tab === "alerts"       && "🚨"}
+                {tab === "multi-doctor" && "👨‍⚕️"}
+                {tab === "duplicates"   && "💊"}
+                {tab === "medicines"    && "📋"}
+              </div>
+              <div className="text-xs mt-0.5 font-medium">
+                {tab === "overview"     && "Home"}
+                {tab === "alerts"       && "Alerts"}
+                {tab === "multi-doctor" && "Doctors"}
+                {tab === "duplicates"   && "Dupes"}
+                {tab === "medicines"    && "Meds"}
+              </div>
+              {tab === "alerts" && visibleCross.length > 0 && (
+                <div className="absolute -top-1 -right-1 w-4 h-4 bg-red-600 rounded-full text-xs text-white flex items-center justify-center">
+                  {visibleCross.length}
+                </div>
+              )}
+            </button>
+          ))}
+        </div>
+      </div>
+
       {/* ── MODALS ── */}
       {showScanner && (
-        <PrescriptionScanner
-          familyMembers={family?.members || []}
-          onDrugsExtracted={handleDrugsExtracted}
-          onClose={() => setShowScanner(false)}
-        />
+        <PrescriptionScanner familyMembers={family?.members || []} onDrugsExtracted={handleDrugsExtracted} onClose={() => setShowScanner(false)} />
       )}
       {showSymptom && (
-        <SymptomChecker
-          members={family?.members || []}
-          onClose={() => setShowSymptom(false)}
-        />
+        <SymptomChecker members={family?.members || []} onClose={() => setShowSymptom(false)} />
       )}
       {showReminder && (
-        <RemindersManager
-          members={family?.members || []}
-          onClose={() => setShowReminder(false)}
-        />
+        <RemindersManager members={family?.members || []} onClose={() => setShowReminder(false)} />
       )}
       {showComparator && (
-        <MedicineComparator
-          onClose={() => setShowComparator(false)}
-        />
+        <MedicineComparator onClose={() => setShowComparator(false)} />
       )}
 
     </div>
