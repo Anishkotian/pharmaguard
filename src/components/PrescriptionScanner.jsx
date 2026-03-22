@@ -3,15 +3,16 @@ import Tesseract from "tesseract.js"
 import { parseDrugsFromText } from "../services/drugParser"
 
 export default function PrescriptionScanner({ familyMembers, onDrugsExtracted, onClose }) {
-  const [image, setImage] = useState(null)
-  const [imageFile, setImageFile] = useState(null)
-  const [step, setStep] = useState("upload")
-  const [ocrProgress, setOcrProgress] = useState(0)
+  const [image, setImage]               = useState(null)
+  const [imageFile, setImageFile]       = useState(null)
+  const [step, setStep]                 = useState("upload")
+  const [ocrProgress, setOcrProgress]   = useState(0)
   const [extractedDrugs, setExtractedDrugs] = useState([])
   const [selectedMember, setSelectedMember] = useState(familyMembers[0]?.id || "")
-  const [doctorName, setDoctorName] = useState("")
-  const [condition, setCondition] = useState("")
-  const [error, setError] = useState(null)
+  const [doctorName, setDoctorName]     = useState("")
+  const [condition, setCondition]       = useState("")
+  const [expiryDate, setExpiryDate]     = useState("")
+  const [error, setError]               = useState(null)
 
   const handleImageUpload = (e) => {
     const file = e.target.files[0]
@@ -59,19 +60,19 @@ export default function PrescriptionScanner({ familyMembers, onDrugsExtracted, o
   }
 
   const handleConfirm = () => {
-    // Attach doctor name and condition to every medicine
-    const drugsWithDoctor = extractedDrugs.map(drug => ({
+    const drugsWithMeta = extractedDrugs.map(drug => ({
       ...drug,
-      doctorName: doctorName.trim() || "Unknown Doctor",
-      condition: condition.trim() || "Unknown condition"
+      doctorName:  doctorName.trim()  || "Unknown Doctor",
+      condition:   condition.trim()   || "Unknown condition",
+      expiryDate:  expiryDate         || null
     }))
-    onDrugsExtracted(selectedMember, drugsWithDoctor)
+    onDrugsExtracted(selectedMember, drugsWithMeta)
     onClose()
   }
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center z-50 p-4">
-      <div className="bg-gray-900 rounded-2xl w-full max-w-lg border border-gray-700 max-h-screen overflow-y-auto">
+    <div className="fixed inset-0 bg-black bg-opacity-80 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4">
+      <div className="bg-gray-900 rounded-t-2xl sm:rounded-2xl w-full sm:max-w-lg border border-gray-700 max-h-[90vh] overflow-y-auto">
 
         <div className="flex items-center justify-between p-5 border-b border-gray-800">
           <h2 className="text-lg font-bold text-white">Scan Prescription</h2>
@@ -86,12 +87,8 @@ export default function PrescriptionScanner({ familyMembers, onDrugsExtracted, o
               <p className="text-gray-400 mb-6">Take a photo or upload your prescription</p>
               <label className="block w-full bg-red-600 hover:bg-red-500 text-white font-bold py-4 rounded-lg cursor-pointer text-center transition-colors">
                 📷 Upload Prescription Photo
-                <input
-                  type="file"
-                  accept="image/png, image/jpeg, image/jpg"
-                  onChange={handleImageUpload}
-                  className="hidden"
-                />
+                <input type="file" accept="image/png, image/jpeg, image/jpg"
+                  onChange={handleImageUpload} className="hidden" />
               </label>
               <p className="text-gray-600 text-xs mt-3">Use a clear JPG or PNG image</p>
             </div>
@@ -101,16 +98,12 @@ export default function PrescriptionScanner({ familyMembers, onDrugsExtracted, o
             <div>
               <img src={image} className="w-full rounded-lg mb-4 max-h-64 object-contain bg-black" />
               {error && <p className="text-red-400 text-sm mb-3">{error}</p>}
-              <button
-                onClick={runOCR}
-                className="w-full bg-red-600 hover:bg-red-500 text-white font-bold py-4 rounded-lg transition-colors"
-              >
+              <button onClick={runOCR}
+                className="w-full bg-red-600 hover:bg-red-500 text-white font-bold py-4 rounded-lg transition-colors">
                 🔍 Read This Prescription
               </button>
-              <button
-                onClick={() => { setStep("upload"); setError(null) }}
-                className="w-full mt-2 text-gray-500 hover:text-white py-2 text-sm"
-              >
+              <button onClick={() => { setStep("upload"); setError(null) }}
+                className="w-full mt-2 text-gray-500 hover:text-white py-2 text-sm">
                 Use a different photo
               </button>
             </div>
@@ -121,10 +114,8 @@ export default function PrescriptionScanner({ familyMembers, onDrugsExtracted, o
               <div className="text-5xl mb-4">🔍</div>
               <p className="text-white font-semibold mb-2">Reading prescription...</p>
               <div className="w-full bg-gray-800 rounded-full h-3 mb-2">
-                <div
-                  className="bg-red-500 h-3 rounded-full transition-all duration-300"
-                  style={{ width: `${ocrProgress}%` }}
-                />
+                <div className="bg-red-500 h-3 rounded-full transition-all duration-300"
+                  style={{width:`${ocrProgress}%`}} />
               </div>
               <p className="text-gray-500 text-sm">{ocrProgress}%</p>
             </div>
@@ -144,87 +135,77 @@ export default function PrescriptionScanner({ familyMembers, onDrugsExtracted, o
                 ✅ Found {extractedDrugs.length} medicine{extractedDrugs.length !== 1 ? "s" : ""}
               </p>
 
-              {/* Member selector */}
-              <div className="mb-4">
+              {/* Member */}
+              <div className="mb-3">
                 <label className="block text-xs text-gray-500 mb-2">ADD TO WHICH MEMBER</label>
-                <select
-                  value={selectedMember}
-                  onChange={e => setSelectedMember(e.target.value)}
-                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-red-500"
-                >
+                <select value={selectedMember} onChange={e => setSelectedMember(e.target.value)}
+                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-red-500">
                   {familyMembers.map(m => (
                     <option key={m.id} value={m.id}>{m.name}</option>
                   ))}
                 </select>
               </div>
 
-              {/* Doctor name */}
-              <div className="mb-4">
+              {/* Doctor */}
+              <div className="mb-3">
                 <label className="block text-xs text-gray-500 mb-2">PRESCRIBING DOCTOR</label>
-                <input
-                  type="text"
-                  placeholder="e.g. Dr. Sharma (Cardiologist)"
-                  value={doctorName}
-                  onChange={e => setDoctorName(e.target.value)}
-                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-red-500"
-                />
+                <input type="text" placeholder="e.g. Dr. Sharma (Cardiologist)"
+                  value={doctorName} onChange={e => setDoctorName(e.target.value)}
+                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-red-500" />
               </div>
 
               {/* Condition */}
-              <div className="mb-4">
-                <label className="block text-xs text-gray-500 mb-2">PRESCRIBED FOR (CONDITION)</label>
-                <input
-                  type="text"
-                  placeholder="e.g. High blood pressure"
-                  value={condition}
-                  onChange={e => setCondition(e.target.value)}
-                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-red-500"
-                />
+              <div className="mb-3">
+                <label className="block text-xs text-gray-500 mb-2">PRESCRIBED FOR</label>
+                <input type="text" placeholder="e.g. High blood pressure"
+                  value={condition} onChange={e => setCondition(e.target.value)}
+                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-red-500" />
               </div>
 
-              {/* Extracted medicines */}
+              {/* Expiry Date */}
+              <div className="mb-4">
+                <label className="block text-xs text-gray-500 mb-2">
+                  MEDICINE EXPIRY DATE (optional)
+                </label>
+                <input type="date" value={expiryDate}
+                  onChange={e => setExpiryDate(e.target.value)}
+                  min={new Date().toISOString().split("T")[0]}
+                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-red-500" />
+                <p className="text-gray-600 text-xs mt-1">
+                  Add expiry date to get alerts before medicine expires
+                </p>
+              </div>
+
+              {/* Medicines list */}
               <div className="space-y-3 mb-4 max-h-48 overflow-y-auto">
                 {extractedDrugs.map((drug, i) => (
                   <div key={i} className="bg-gray-800 rounded-lg p-3 border border-gray-700">
                     <div className="flex justify-between items-start mb-2">
-                      <input
-                        value={drug.brandName}
+                      <input value={drug.brandName}
                         onChange={e => updateDrug(i, "brandName", e.target.value)}
-                        className="bg-transparent text-white font-medium text-sm focus:outline-none border-b border-gray-600 flex-1 mr-2"
-                      />
-                      <button
-                        onClick={() => removeDrug(i)}
-                        className="text-gray-600 hover:text-red-500 text-lg"
-                      >×</button>
+                        className="bg-transparent text-white font-medium text-sm focus:outline-none border-b border-gray-600 flex-1 mr-2" />
+                      <button onClick={() => removeDrug(i)}
+                        className="text-gray-600 hover:text-red-500 text-lg">×</button>
                     </div>
                     <div className="flex gap-2">
-                      <input
-                        value={drug.dose}
-                        onChange={e => updateDrug(i, "dose", e.target.value)}
+                      <input value={drug.dose} onChange={e => updateDrug(i, "dose", e.target.value)}
                         placeholder="dose"
-                        className="bg-gray-700 rounded px-2 py-1 text-xs text-gray-300 w-24 focus:outline-none"
-                      />
-                      <input
-                        value={drug.frequency}
-                        onChange={e => updateDrug(i, "frequency", e.target.value)}
+                        className="bg-gray-700 rounded px-2 py-1 text-xs text-gray-300 w-24 focus:outline-none" />
+                      <input value={drug.frequency} onChange={e => updateDrug(i, "frequency", e.target.value)}
                         placeholder="frequency"
-                        className="bg-gray-700 rounded px-2 py-1 text-xs text-gray-300 flex-1 focus:outline-none"
-                      />
+                        className="bg-gray-700 rounded px-2 py-1 text-xs text-gray-300 flex-1 focus:outline-none" />
                     </div>
                     <p className="text-xs text-gray-600 mt-1">{drug.genericName}</p>
                   </div>
                 ))}
               </div>
 
-              <button
-                onClick={handleConfirm}
-                className="w-full bg-red-600 hover:bg-red-500 text-white font-bold py-4 rounded-lg transition-colors"
-              >
+              <button onClick={handleConfirm}
+                className="w-full bg-red-600 hover:bg-red-500 text-white font-bold py-4 rounded-lg transition-colors">
                 ✅ Save These Medicines
               </button>
             </div>
           )}
-
         </div>
       </div>
     </div>

@@ -5,15 +5,18 @@ import {
 } from "../services/familyService"
 import { checkCrossFamily, checkSamePersonMultiDoctor } from "../services/interactionChecker"
 import { findDuplicates } from "../services/duplicateChecker"
+import { calculateFamilyScores, calculateFamilyOverallScore } from "../services/safetyScoreService"
 import PrescriptionScanner from "../components/PrescriptionScanner"
 import AlertCard from "../components/AlertCard"
 import MultiDoctorAlert from "../components/MultiDoctorAlert"
 import FamilyMap from "../components/FamilyMap"
 import DuplicateAlert from "../components/DuplicateAlert"
+import SafetyScore from "../components/SafetyScore"
 import SymptomChecker from "./SymptomChecker"
 import RemindersManager from "./RemindersManager"
 import MedicineComparator from "./MedicineComparator"
 import DoctorBrief from "./DoctorBrief"
+import FoodChecker from "./FoodChecker"
 
 export default function Dashboard({ familyId, onReset }) {
   const [family, setFamily]                       = useState(null)
@@ -24,9 +27,13 @@ export default function Dashboard({ familyId, onReset }) {
   const [showSettings, setShowSettings]           = useState(false)
   const [showComparator, setShowComparator]       = useState(false)
   const [showDoctorBrief, setShowDoctorBrief]     = useState(false)
+  const [showSafetyScore, setShowSafetyScore]     = useState(false)
+  const [showFoodChecker, setShowFoodChecker]     = useState(false)
   const [crossFamilyAlerts, setCrossFamilyAlerts] = useState([])
   const [multiDoctorAlerts, setMultiDoctorAlerts] = useState([])
   const [duplicates, setDuplicates]               = useState([])
+  const [memberScores, setMemberScores]           = useState([])
+  const [overallScore, setOverallScore]           = useState(100)
   const [activeTab, setActiveTab]                 = useState("overview")
   const [dismissedCross, setDismissedCross]       = useState([])
   const [dismissedMulti, setDismissedMulti]       = useState([])
@@ -41,6 +48,9 @@ export default function Dashboard({ familyId, onReset }) {
       setCrossFamilyAlerts(checkCrossFamily(data.members))
       setMultiDoctorAlerts(checkSamePersonMultiDoctor(data.members))
       setDuplicates(findDuplicates(data.members))
+      const scores = calculateFamilyScores(data.members)
+      setMemberScores(scores)
+      setOverallScore(calculateFamilyOverallScore(scores))
     }
   }
 
@@ -81,11 +91,36 @@ export default function Dashboard({ familyId, onReset }) {
   const visibleCross = crossFamilyAlerts.filter((_, i) => !dismissedCross.includes(i))
   const visibleMulti = multiDoctorAlerts.filter((_, i) => !dismissedMulti.includes(i))
   const totalIssues  = visibleCross.length + visibleMulti.length + duplicates.length
+  const totalMeds    = family?.members.reduce((s, m) => s + m.medicines.length, 0) || 0
+
+  const scoreGrad =
+    overallScore >= 80 ? "from-green-500  to-emerald-400" :
+    overallScore >= 60 ? "from-yellow-500 to-amber-400"   :
+    overallScore >= 40 ? "from-orange-500 to-orange-400"  :
+                         "from-red-600    to-red-400"
+
+  const scoreTxt =
+    overallScore >= 80 ? "text-emerald-400" :
+    overallScore >= 60 ? "text-yellow-400"  :
+    overallScore >= 40 ? "text-orange-400"  :
+                         "text-red-400"
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-950 text-white flex items-center justify-center">
-        <p className="text-gray-400">Loading...</p>
+      <div style={{
+        minHeight:"100vh", background:"#05070A",
+        display:"flex", alignItems:"center", justifyContent:"center",
+        flexDirection:"column", gap:"16px"
+      }}>
+        <div style={{
+          width:"48px", height:"48px", borderRadius:"50%",
+          border:"3px solid #CC2222", borderTopColor:"transparent",
+          animation:"spin 0.8s linear infinite"
+        }}/>
+        <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+        <p style={{color:"#636E7B", fontFamily:"'JetBrains Mono',monospace", fontSize:"12px", letterSpacing:"0.2em"}}>
+          LOADING...
+        </p>
       </div>
     )
   }
@@ -93,157 +128,513 @@ export default function Dashboard({ familyId, onReset }) {
   const tabs = ["overview", "alerts", "multi-doctor", "duplicates", "medicines"]
 
   return (
-    <div className="min-h-screen bg-gray-950 text-white">
+    <div style={{minHeight:"100vh", background:"#05070A", color:"#EAEEF2", fontFamily:"'DM Sans',sans-serif"}}>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap');
 
-      {/* ── STICKY HEADER ── */}
-      <div className="sticky top-0 z-40 bg-gray-950 border-b border-gray-800 px-4 py-3 sm:px-6">
-        <div className="max-w-2xl mx-auto">
-          <div className="flex items-center justify-between gap-2">
-            <div className="min-w-0">
-              <h1 className="text-xl sm:text-2xl font-bold text-red-500 truncate"
-                  style={{fontFamily:"'Bebas Neue',sans-serif",letterSpacing:"0.06em"}}>
+        .dash-btn { transition: all 0.2s ease; }
+        .dash-btn:hover { transform: translateY(-1px); }
+        .dash-btn:active { transform: translateY(0); }
+
+        .tool-card {
+          background: rgba(255,255,255,0.03);
+          border: 1px solid rgba(255,255,255,0.06);
+          border-radius: 16px;
+          padding: 18px 20px;
+          cursor: pointer;
+          transition: all 0.25s ease;
+          display: flex;
+          align-items: center;
+          gap: 14px;
+          text-align: left;
+        }
+        .tool-card:hover {
+          background: rgba(255,255,255,0.06);
+          border-color: rgba(255,255,255,0.12);
+          transform: translateY(-2px);
+          box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+        }
+        .tool-icon {
+          width: 44px; height: 44px;
+          border-radius: 12px;
+          display: flex; align-items: center; justify-content: center;
+          font-size: 20px; flex-shrink: 0;
+        }
+
+        .score-card {
+          border-radius: 16px;
+          padding: 16px 18px;
+          cursor: pointer;
+          transition: all 0.25s;
+          flex-shrink: 0;
+          min-width: 100px;
+          text-align: center;
+          border: 1px solid rgba(255,255,255,0.06);
+          background: rgba(255,255,255,0.03);
+        }
+        .score-card:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,0,0,0.4); }
+
+        .med-card {
+          background: rgba(255,255,255,0.03);
+          border: 1px solid rgba(255,255,255,0.06);
+          border-radius: 14px;
+          transition: all 0.2s;
+        }
+        .med-item {
+          background: rgba(255,255,255,0.04);
+          border-radius: 10px;
+          transition: all 0.2s;
+        }
+        .med-item:hover { background: rgba(255,255,255,0.07); }
+
+        .tab-btn {
+          flex-shrink: 0;
+          padding: 8px 16px;
+          border-radius: 10px;
+          font-size: 12px;
+          font-weight: 600;
+          transition: all 0.2s;
+          border: none;
+          cursor: pointer;
+          font-family: 'DM Sans', sans-serif;
+        }
+        .tab-btn.active { background: #CC2222; color: white; }
+        .tab-btn.inactive { background: rgba(255,255,255,0.05); color: #636E7B; }
+        .tab-btn.inactive:hover { background: rgba(255,255,255,0.08); color: #EAEEF2; }
+
+        .action-btn {
+          border: none;
+          cursor: pointer;
+          font-family: 'DM Sans', sans-serif;
+          font-weight: 700;
+          border-radius: 12px;
+          transition: all 0.2s;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 6px;
+        }
+        .action-btn:hover { transform: translateY(-1px); }
+
+        .stat-box {
+          background: rgba(255,255,255,0.03);
+          border: 1px solid rgba(255,255,255,0.06);
+          border-radius: 14px;
+          padding: 16px;
+          text-align: center;
+          flex: 1;
+        }
+
+        .glow-red    { box-shadow: 0 0 20px rgba(204,34,34,0.15); }
+        .glow-green  { box-shadow: 0 0 20px rgba(0,255,136,0.10); }
+
+        .mobile-nav-btn {
+          flex: 1;
+          padding: 10px 4px;
+          text-align: center;
+          background: none;
+          border: none;
+          cursor: pointer;
+          transition: all 0.2s;
+          font-family: 'DM Sans', sans-serif;
+          position: relative;
+        }
+
+        .scan-pulse {
+          animation: scanPulse 2s ease-in-out infinite;
+        }
+        @keyframes scanPulse {
+          0%,100% { box-shadow: 0 0 0 0 rgba(204,34,34,0.4); }
+          50% { box-shadow: 0 0 0 8px rgba(204,34,34,0); }
+        }
+
+        .fade-in {
+          animation: fadeIn 0.4s ease both;
+        }
+        @keyframes fadeIn {
+          from { opacity:0; transform:translateY(8px); }
+          to   { opacity:1; transform:translateY(0); }
+        }
+
+        @media(max-width:640px) {
+          .desktop-only { display: none !important; }
+        }
+        @media(min-width:641px) {
+          .mobile-only { display: none !important; }
+          .mobile-nav  { display: none !important; }
+        }
+      `}</style>
+
+      {/* ── HEADER ── */}
+      <div style={{
+        position:"sticky", top:0, zIndex:40,
+        background:"rgba(5,7,10,0.85)",
+        backdropFilter:"blur(24px)",
+        borderBottom:"1px solid rgba(255,255,255,0.06)",
+        padding:"0 16px",
+      }}>
+        <div style={{maxWidth:"720px", margin:"0 auto", padding:"12px 0", display:"flex", alignItems:"center", justifyContent:"space-between", gap:"12px"}}>
+
+          {/* Left — Logo + Score */}
+          <div style={{display:"flex", alignItems:"center", gap:"12px", minWidth:0}}>
+            <div>
+              <div style={{
+                fontFamily:"'Bebas Neue',sans-serif",
+                fontSize:"22px", letterSpacing:"0.08em",
+                color:"#CC2222", lineHeight:1
+              }}>
                 PharmaGuard
-              </h1>
-              <p className="text-gray-500 text-xs truncate">{family?.familyName}</p>
+              </div>
+              <div style={{
+                fontSize:"11px", color:"#636E7B",
+                fontFamily:"'JetBrains Mono',monospace",
+                letterSpacing:"0.06em", marginTop:"2px"
+              }}>
+                {family?.familyName}
+              </div>
             </div>
 
-            {/* ── DESKTOP BUTTONS ── */}
-            <div className="hidden sm:flex flex-wrap gap-2 justify-end">
-              <button onClick={() => setShowSymptom(true)}
-                className="bg-gray-800 hover:bg-gray-700 text-white font-bold px-3 py-2 rounded-xl transition-colors text-xs">
-                🤒 Symptom
-              </button>
-              <button onClick={() => setShowComparator(true)}
-                className="bg-gray-800 hover:bg-gray-700 text-white font-bold px-3 py-2 rounded-xl transition-colors text-xs">
-                💊 Compare
-              </button>
-              <button onClick={() => setShowReminder(true)}
-                className="bg-gray-800 hover:bg-gray-700 text-white font-bold px-3 py-2 rounded-xl transition-colors text-xs">
-                ⏰ Reminders
-              </button>
-              <button onClick={() => setShowDoctorBrief(true)}
-                className="bg-gray-800 hover:bg-gray-700 text-white font-bold px-3 py-2 rounded-xl transition-colors text-xs">
-                🏥 Brief
-              </button>
-              <button onClick={() => setShowScanner(true)}
-                className="bg-red-600 hover:bg-red-500 text-white font-bold px-3 py-2 rounded-xl transition-colors text-xs">
-                📷 Scan
-              </button>
-              <button onClick={() => setShowSettings(!showSettings)}
-                className="bg-gray-800 hover:bg-gray-700 text-white font-bold px-3 py-2 rounded-xl transition-colors text-xs">
-                ⚙️
-              </button>
-            </div>
-
-            {/* ── MOBILE BUTTONS ── */}
-            <div className="flex sm:hidden gap-2">
-              <button onClick={() => setShowScanner(true)}
-                className="bg-red-600 hover:bg-red-500 text-white font-bold px-3 py-2 rounded-xl transition-colors text-xs">
-                📷 Scan
-              </button>
-              <button onClick={() => setShowSettings(!showSettings)}
-                className="bg-gray-800 text-white font-bold px-3 py-2 rounded-xl transition-colors text-xs">
-                ☰
-              </button>
-            </div>
+            {/* Score pill */}
+            <button
+              className="dash-btn"
+              onClick={() => setShowSafetyScore(true)}
+              style={{
+                background:"rgba(255,255,255,0.04)",
+                border:"1px solid rgba(255,255,255,0.08)",
+                borderRadius:"24px",
+                padding:"6px 14px",
+                display:"flex", alignItems:"center", gap:"6px",
+                cursor:"pointer",
+              }}
+            >
+              <div style={{
+                width:"8px", height:"8px", borderRadius:"50%",
+                background: overallScore >= 80 ? "#00FF88" : overallScore >= 60 ? "#FFD60A" : overallScore >= 40 ? "#FF6B35" : "#FF2D4B",
+                boxShadow: `0 0 6px ${overallScore >= 80 ? "#00FF88" : overallScore >= 60 ? "#FFD60A" : overallScore >= 40 ? "#FF6B35" : "#FF2D4B"}`,
+              }}/>
+              <span className={scoreTxt} style={{
+                fontFamily:"'Bebas Neue',sans-serif",
+                fontSize:"17px", letterSpacing:"0.04em"
+              }}>
+                {overallScore}
+              </span>
+              <span style={{color:"#636E7B", fontSize:"10px", fontFamily:"'JetBrains Mono',monospace"}}>
+                /100
+              </span>
+            </button>
           </div>
 
-          {/* ── SETTINGS / MOBILE MENU ── */}
-          {showSettings && (
-            <div className="mt-3 bg-gray-900 border border-gray-700 rounded-xl p-4">
+          {/* Right — Desktop buttons */}
+          <div className="desktop-only" style={{display:"flex", gap:"8px", flexWrap:"wrap", justifyContent:"flex-end"}}>
+            {[
+              { icon:"🤒", label:"Symptom",   action: () => setShowSymptom(true) },
+              { icon:"💊", label:"Compare",   action: () => setShowComparator(true) },
+              { icon:"🍽️", label:"Food",      action: () => setShowFoodChecker(true) },
+              { icon:"⏰", label:"Reminders", action: () => setShowReminder(true) },
+              { icon:"🏥", label:"Brief",     action: () => setShowDoctorBrief(true) },
+              { icon:"🛡️", label:"Score",     action: () => setShowSafetyScore(true) },
+            ].map(btn => (
+              <button key={btn.label} className="dash-btn action-btn"
+                onClick={btn.action}
+                style={{
+                  background:"rgba(255,255,255,0.05)",
+                  color:"#EAEEF2", padding:"8px 12px",
+                  fontSize:"11px", gap:"5px",
+                  border:"1px solid rgba(255,255,255,0.08)",
+                }}
+              >
+                <span>{btn.icon}</span>
+                <span>{btn.label}</span>
+              </button>
+            ))}
+            <button className="dash-btn action-btn scan-pulse"
+              onClick={() => setShowScanner(true)}
+              style={{background:"#CC2222", color:"white", padding:"8px 14px", fontSize:"11px"}}
+            >
+              📷 Scan
+            </button>
+            <button className="dash-btn action-btn"
+              onClick={() => setShowSettings(!showSettings)}
+              style={{background:"rgba(255,255,255,0.05)", color:"#EAEEF2", padding:"8px 10px",
+                fontSize:"13px", border:"1px solid rgba(255,255,255,0.08)"}}
+            >
+              ⚙️
+            </button>
+          </div>
 
-              {/* Mobile action grid */}
-              <div className="grid grid-cols-3 gap-2 mb-4 sm:hidden">
-                <button onClick={() => { setShowSymptom(true); setShowSettings(false) }}
-                  className="bg-gray-800 text-white font-bold py-3 rounded-xl text-xs text-center">
-                  🤒<br/>Symptom
-                </button>
-                <button onClick={() => { setShowComparator(true); setShowSettings(false) }}
-                  className="bg-gray-800 text-white font-bold py-3 rounded-xl text-xs text-center">
-                  💊<br/>Compare
-                </button>
-                <button onClick={() => { setShowReminder(true); setShowSettings(false) }}
-                  className="bg-gray-800 text-white font-bold py-3 rounded-xl text-xs text-center">
-                  ⏰<br/>Reminders
-                </button>
-                <button onClick={() => { setShowDoctorBrief(true); setShowSettings(false) }}
-                  className="bg-gray-800 text-white font-bold py-3 rounded-xl text-xs text-center col-span-3">
-                  🏥 Generate Doctor Brief
-                </button>
-              </div>
-
-              {/* Reset */}
-              <div className="flex items-center justify-between bg-red-950 border border-red-800 rounded-lg p-3">
-                <div>
-                  <p className="text-white font-semibold text-sm">Reset Entire App</p>
-                  <p className="text-gray-400 text-xs mt-0.5">Deletes all family data permanently</p>
-                </div>
-                <button onClick={handleResetApp}
-                  className="bg-red-600 hover:bg-red-500 text-white text-xs font-bold px-3 py-2 rounded-lg ml-3 flex-shrink-0">
-                  Reset
-                </button>
-              </div>
-            </div>
-          )}
+          {/* Mobile buttons */}
+          <div className="mobile-only" style={{display:"flex", gap:"8px"}}>
+            <button className="dash-btn action-btn scan-pulse"
+              onClick={() => setShowScanner(true)}
+              style={{background:"#CC2222", color:"white", padding:"8px 14px", fontSize:"12px"}}
+            >
+              📷
+            </button>
+            <button className="dash-btn action-btn"
+              onClick={() => setShowSettings(!showSettings)}
+              style={{background:"rgba(255,255,255,0.05)", color:"#EAEEF2",
+                padding:"8px 12px", fontSize:"13px",
+                border:"1px solid rgba(255,255,255,0.08)"}}
+            >
+              ☰
+            </button>
+          </div>
         </div>
-      </div>
 
-      {/* ── MAIN CONTENT ── */}
-      <div className="max-w-2xl mx-auto px-4 py-4 sm:px-6 sm:py-6 pb-24 sm:pb-6">
+        {/* Settings / Mobile menu */}
+        {showSettings && (
+          <div className="fade-in" style={{
+            maxWidth:"720px", margin:"0 auto",
+            background:"rgba(255,255,255,0.03)",
+            border:"1px solid rgba(255,255,255,0.08)",
+            borderRadius:"16px", padding:"16px",
+            marginBottom:"12px"
+          }}>
+            {/* Mobile action grid */}
+            <div className="mobile-only" style={{
+              display:"grid", gridTemplateColumns:"repeat(3,1fr)",
+              gap:"8px", marginBottom:"12px"
+            }}>
+              {[
+                { icon:"🤒", label:"Symptom",   action: () => { setShowSymptom(true);     setShowSettings(false) } },
+                { icon:"💊", label:"Compare",   action: () => { setShowComparator(true);  setShowSettings(false) } },
+                { icon:"🍽️", label:"Food",      action: () => { setShowFoodChecker(true); setShowSettings(false) } },
+                { icon:"⏰", label:"Reminders", action: () => { setShowReminder(true);    setShowSettings(false) } },
+                { icon:"🛡️", label:"Score",     action: () => { setShowSafetyScore(true); setShowSettings(false) } },
+                { icon:"🏥", label:"Brief",     action: () => { setShowDoctorBrief(true); setShowSettings(false) } },
+              ].map(btn => (
+                <button key={btn.label} onClick={btn.action}
+                  style={{
+                    background:"rgba(255,255,255,0.05)",
+                    border:"1px solid rgba(255,255,255,0.08)",
+                    borderRadius:"12px", padding:"14px 8px",
+                    color:"#EAEEF2", cursor:"pointer",
+                    fontFamily:"'DM Sans',sans-serif",
+                    fontSize:"11px", fontWeight:"600",
+                    display:"flex", flexDirection:"column",
+                    alignItems:"center", gap:"6px",
+                    transition:"all 0.2s"
+                  }}
+                >
+                  <span style={{fontSize:"20px"}}>{btn.icon}</span>
+                  <span>{btn.label}</span>
+                </button>
+              ))}
+            </div>
 
-        {/* Issue Summary */}
-        {totalIssues > 0 && (
-          <div className="bg-red-950 border border-red-800 rounded-xl p-4 mb-4">
-            <div className="flex items-center gap-3">
-              <span className="text-2xl sm:text-3xl">🚨</span>
+            {/* Reset */}
+            <div style={{
+              display:"flex", alignItems:"center", justifyContent:"space-between",
+              background:"rgba(204,34,34,0.08)",
+              border:"1px solid rgba(204,34,34,0.2)",
+              borderRadius:"12px", padding:"14px 16px"
+            }}>
               <div>
-                <p className="text-red-400 font-bold text-sm sm:text-base">
-                  {totalIssues} Issue{totalIssues > 1 ? "s" : ""} Found
+                <p style={{color:"#EAEEF2", fontWeight:"600", fontSize:"13px", margin:0}}>
+                  Reset Entire App
                 </p>
-                <p className="text-gray-400 text-xs">
-                  {visibleCross.length} cross-family · {visibleMulti.length} multi-doctor · {duplicates.length} duplicate{duplicates.length !== 1 ? "s" : ""}
+                <p style={{color:"#636E7B", fontSize:"11px", margin:"2px 0 0"}}>
+                  Deletes all family data permanently
                 </p>
               </div>
+              <button onClick={handleResetApp} style={{
+                background:"#CC2222", color:"white",
+                border:"none", borderRadius:"10px",
+                padding:"8px 16px", fontSize:"12px",
+                fontWeight:"700", cursor:"pointer",
+                fontFamily:"'DM Sans',sans-serif",
+                marginLeft:"12px", flexShrink:0
+              }}>
+                Reset
+              </button>
             </div>
           </div>
         )}
+      </div>
 
-        {totalIssues === 0 && (
-          <div className="bg-green-950 border border-green-800 rounded-xl p-4 mb-4 flex items-center gap-3">
-            <span className="text-xl">✅</span>
-            <p className="text-green-400 font-semibold text-sm">
+      {/* ── MAIN ── */}
+      <div style={{maxWidth:"720px", margin:"0 auto", padding:"20px 16px 100px"}}>
+
+        {/* ── HERO STATS ROW ── */}
+        <div style={{display:"flex", gap:"10px", marginBottom:"20px", overflowX:"auto", paddingBottom:"4px"}}>
+
+          {/* Overall score big card */}
+          <div
+            onClick={() => setShowSafetyScore(true)}
+            style={{
+              background: overallScore >= 80
+                ? "linear-gradient(135deg, rgba(0,255,136,0.12), rgba(0,255,136,0.04))"
+                : overallScore >= 60
+                ? "linear-gradient(135deg, rgba(255,214,10,0.12), rgba(255,214,10,0.04))"
+                : "linear-gradient(135deg, rgba(204,34,34,0.15), rgba(204,34,34,0.05))",
+              border: `1px solid ${overallScore >= 80 ? "rgba(0,255,136,0.2)" : overallScore >= 60 ? "rgba(255,214,10,0.2)" : "rgba(204,34,34,0.25)"}`,
+              borderRadius:"20px", padding:"20px 24px",
+              cursor:"pointer", transition:"all 0.25s",
+              flexShrink:0, minWidth:"130px"
+            }}
+            className="dash-btn"
+          >
+            <p style={{
+              fontFamily:"'JetBrains Mono',monospace",
+              fontSize:"9px", letterSpacing:"0.2em",
+              color:"#636E7B", textTransform:"uppercase",
+              margin:"0 0 8px"
+            }}>Family Score</p>
+            <p className={scoreTxt} style={{
+              fontFamily:"'Bebas Neue',sans-serif",
+              fontSize:"52px", lineHeight:1,
+              margin:"0 0 2px"
+            }}>{overallScore}</p>
+            <p style={{color:"#636E7B", fontSize:"11px", margin:0}}>
+              {overallScore >= 80 ? "✅ Safe" : overallScore >= 60 ? "⚠️ Moderate" : overallScore >= 40 ? "🔶 At Risk" : "🚨 Danger"}
+            </p>
+          </div>
+
+          {/* Member score cards */}
+          {memberScores.map(ms => (
+            <div
+              key={ms.member.id}
+              onClick={() => setShowSafetyScore(true)}
+              className="score-card dash-btn"
+            >
+              <p style={{
+                fontFamily:"'JetBrains Mono',monospace",
+                fontSize:"9px", letterSpacing:"0.1em",
+                color:"#636E7B", textTransform:"uppercase",
+                margin:"0 0 6px", whiteSpace:"nowrap", overflow:"hidden",
+                textOverflow:"ellipsis"
+              }}>
+                {ms.member.name}
+              </p>
+              <p style={{
+                fontFamily:"'Bebas Neue',sans-serif",
+                fontSize:"32px", lineHeight:1,
+                color: ms.color === "green" ? "#00FF88" : ms.color === "yellow" ? "#FFD60A" : ms.color === "orange" ? "#FF6B35" : "#FF2D4B",
+                margin:"0 0 4px"
+              }}>{ms.score}</p>
+              <div style={{
+                width:"100%", height:"3px",
+                background:"rgba(255,255,255,0.08)",
+                borderRadius:"2px", overflow:"hidden"
+              }}>
+                <div style={{
+                  height:"100%",
+                  width:`${ms.score}%`,
+                  background: ms.color === "green" ? "#00FF88" : ms.color === "yellow" ? "#FFD60A" : ms.color === "orange" ? "#FF6B35" : "#FF2D4B",
+                  borderRadius:"2px",
+                  transition:"width 1s ease"
+                }}/>
+              </div>
+              <p style={{color:"#636E7B", fontSize:"10px", margin:"4px 0 0"}}>{ms.emoji}</p>
+            </div>
+          ))}
+
+          {/* Stats cards */}
+          <div className="stat-box">
+            <p style={{fontFamily:"'JetBrains Mono',monospace", fontSize:"9px", letterSpacing:"0.15em", color:"#636E7B", margin:"0 0 6px"}}>MEMBERS</p>
+            <p style={{fontFamily:"'Bebas Neue',sans-serif", fontSize:"32px", color:"#00D4FF", margin:0, lineHeight:1}}>
+              {family?.members.length || 0}
+            </p>
+          </div>
+
+          <div className="stat-box">
+            <p style={{fontFamily:"'JetBrains Mono',monospace", fontSize:"9px", letterSpacing:"0.15em", color:"#636E7B", margin:"0 0 6px"}}>MEDICINES</p>
+            <p style={{fontFamily:"'Bebas Neue',sans-serif", fontSize:"32px", color:"#BF5AF2", margin:0, lineHeight:1}}>
+              {totalMeds}
+            </p>
+          </div>
+
+          <div className="stat-box" style={{cursor:"pointer"}} onClick={() => setActiveTab("alerts")}>
+            <p style={{fontFamily:"'JetBrains Mono',monospace", fontSize:"9px", letterSpacing:"0.15em", color:"#636E7B", margin:"0 0 6px"}}>ALERTS</p>
+            <p style={{
+              fontFamily:"'Bebas Neue',sans-serif", fontSize:"32px",
+              color: totalIssues > 0 ? "#FF2D4B" : "#00FF88",
+              margin:0, lineHeight:1
+            }}>
+              {totalIssues}
+            </p>
+          </div>
+        </div>
+
+        {/* ── STATUS BANNER ── */}
+        {totalIssues > 0 ? (
+          <div className="fade-in" style={{
+            background:"linear-gradient(135deg, rgba(204,34,34,0.15), rgba(204,34,34,0.05))",
+            border:"1px solid rgba(204,34,34,0.3)",
+            borderRadius:"16px", padding:"16px 20px",
+            marginBottom:"16px",
+            display:"flex", alignItems:"center", gap:"14px"
+          }}>
+            <div style={{
+              width:"40px", height:"40px", borderRadius:"12px",
+              background:"rgba(204,34,34,0.2)",
+              display:"flex", alignItems:"center", justifyContent:"center",
+              fontSize:"20px", flexShrink:0,
+              animation:"scanPulse 2s ease-in-out infinite"
+            }}>🚨</div>
+            <div>
+              <p style={{color:"#FF5555", fontWeight:"700", fontSize:"14px", margin:"0 0 2px"}}>
+                {totalIssues} Issue{totalIssues > 1 ? "s" : ""} Detected
+              </p>
+              <p style={{color:"#636E7B", fontSize:"12px", margin:0}}>
+                {visibleCross.length > 0 && `${visibleCross.length} cross-family `}
+                {visibleMulti.length > 0 && `${visibleMulti.length} multi-doctor `}
+                {duplicates.length > 0 && `${duplicates.length} duplicate${duplicates.length > 1 ? "s" : ""}`}
+              </p>
+            </div>
+          </div>
+        ) : (
+          <div className="fade-in" style={{
+            background:"linear-gradient(135deg, rgba(0,255,136,0.08), rgba(0,255,136,0.02))",
+            border:"1px solid rgba(0,255,136,0.15)",
+            borderRadius:"16px", padding:"14px 20px",
+            marginBottom:"16px",
+            display:"flex", alignItems:"center", gap:"12px"
+          }}>
+            <div style={{
+              width:"36px", height:"36px", borderRadius:"10px",
+              background:"rgba(0,255,136,0.12)",
+              display:"flex", alignItems:"center", justifyContent:"center",
+              fontSize:"18px", flexShrink:0
+            }}>✅</div>
+            <p style={{color:"#00CC66", fontWeight:"600", fontSize:"13px", margin:0}}>
               No issues detected — your family is safe
             </p>
           </div>
         )}
 
         {/* ── TABS ── */}
-        <div className="flex gap-2 mb-5 overflow-x-auto pb-1 -mx-4 px-4 sm:mx-0 sm:px-0 sm:flex-wrap">
+        <div style={{
+          display:"flex", gap:"6px", marginBottom:"20px",
+          overflowX:"auto", paddingBottom:"4px",
+          marginLeft:"-16px", paddingLeft:"16px",
+          marginRight:"-16px", paddingRight:"16px"
+        }}>
           {tabs.map(tab => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
-              className={`flex-shrink-0 px-3 py-2 rounded-lg text-xs font-semibold capitalize transition-colors ${
-                activeTab === tab
-                  ? "bg-red-600 text-white"
-                  : "bg-gray-900 text-gray-400 hover:text-white"
-              }`}
+              className={`tab-btn ${activeTab === tab ? "active" : "inactive"}`}
+              style={{position:"relative"}}
             >
-              {tab === "multi-doctor" ? "👨‍⚕️ Multi" : tab}
+              {tab === "multi-doctor" ? "👨‍⚕️ Multi" : tab.charAt(0).toUpperCase() + tab.slice(1)}
               {tab === "alerts" && visibleCross.length > 0 && (
-                <span className="ml-1 bg-red-800 text-red-200 text-xs px-1.5 py-0.5 rounded-full">
-                  {visibleCross.length}
-                </span>
+                <span style={{
+                  position:"absolute", top:"-6px", right:"-6px",
+                  background:"#CC2222", color:"white",
+                  width:"16px", height:"16px", borderRadius:"50%",
+                  fontSize:"9px", display:"flex", alignItems:"center", justifyContent:"center",
+                  fontWeight:"700"
+                }}>{visibleCross.length}</span>
               )}
               {tab === "multi-doctor" && visibleMulti.length > 0 && (
-                <span className="ml-1 bg-orange-800 text-orange-200 text-xs px-1.5 py-0.5 rounded-full">
-                  {visibleMulti.length}
-                </span>
-              )}
-              {tab === "duplicates" && duplicates.length > 0 && (
-                <span className="ml-1 bg-yellow-800 text-yellow-200 text-xs px-1.5 py-0.5 rounded-full">
-                  {duplicates.length}
-                </span>
+                <span style={{
+                  position:"absolute", top:"-6px", right:"-6px",
+                  background:"#CC6600", color:"white",
+                  width:"16px", height:"16px", borderRadius:"50%",
+                  fontSize:"9px", display:"flex", alignItems:"center", justifyContent:"center",
+                  fontWeight:"700"
+                }}>{visibleMulti.length}</span>
               )}
             </button>
           ))}
@@ -251,232 +642,345 @@ export default function Dashboard({ familyId, onReset }) {
 
         {/* ── OVERVIEW TAB ── */}
         {activeTab === "overview" && (
-          <div>
+          <div className="fade-in">
             <FamilyMap
               members={family?.members || []}
               alerts={[...crossFamilyAlerts, ...multiDoctorAlerts]}
             />
-            {/* Doctor Brief quick action */}
-            <div
-              onClick={() => setShowDoctorBrief(true)}
-              className="mt-4 bg-gray-900 border border-gray-700 hover:border-red-700 rounded-xl p-4 flex items-center gap-4 cursor-pointer transition-colors group"
-            >
-              <div className="text-3xl">🏥</div>
-              <div className="flex-1">
-                <p className="text-white font-semibold text-sm group-hover:text-red-400 transition-colors">
-                  Generate Doctor Brief
-                </p>
-                <p className="text-gray-500 text-xs mt-0.5">
-                  AI-generated PDF summary of all medicines and alerts for your doctor
-                </p>
-              </div>
-              <div className="text-gray-600 group-hover:text-red-500 transition-colors">→</div>
+
+            {/* Tool cards grid */}
+            <p style={{
+              fontFamily:"'JetBrains Mono',monospace",
+              fontSize:"9px", letterSpacing:"0.25em",
+              color:"#636E7B", textTransform:"uppercase",
+              margin:"24px 0 12px"
+            }}>Quick Actions</p>
+
+            <div style={{display:"grid", gridTemplateColumns:"1fr 1fr", gap:"10px"}}>
+              {[
+                {
+                  icon:"🍽️", label:"Food Interactions",
+                  desc:"Check foods to avoid",
+                  bg:"rgba(255,107,53,0.1)", border:"rgba(255,107,53,0.2)",
+                  action: () => setShowFoodChecker(true)
+                },
+                {
+                  icon:"🤒", label:"Symptom Checker",
+                  desc:"Find medicine side effects",
+                  bg:"rgba(255,214,10,0.08)", border:"rgba(255,214,10,0.18)",
+                  action: () => setShowSymptom(true)
+                },
+                {
+                  icon:"💊", label:"Compare Medicines",
+                  desc:"Same molecule check",
+                  bg:"rgba(0,212,255,0.08)", border:"rgba(0,212,255,0.18)",
+                  action: () => setShowComparator(true)
+                },
+                {
+                  icon:"🏥", label:"Doctor Brief",
+                  desc:"AI-generated PDF",
+                  bg:"rgba(191,90,242,0.08)", border:"rgba(191,90,242,0.18)",
+                  action: () => setShowDoctorBrief(true)
+                },
+                {
+                  icon:"⏰", label:"Reminders",
+                  desc:"Medicine schedules",
+                  bg:"rgba(0,255,136,0.08)", border:"rgba(0,255,136,0.18)",
+                  action: () => setShowReminder(true)
+                },
+                {
+                  icon:"🛡️", label:"Safety Score",
+                  desc:`Family score: ${overallScore}/100`,
+                  bg:"rgba(204,34,34,0.08)", border:"rgba(204,34,34,0.18)",
+                  action: () => setShowSafetyScore(true)
+                },
+              ].map(card => (
+                <div
+                  key={card.label}
+                  className="tool-card"
+                  onClick={card.action}
+                  style={{
+                    background: card.bg,
+                    borderColor: card.border,
+                  }}
+                >
+                  <div className="tool-icon" style={{background: card.bg, border:`1px solid ${card.border}`}}>
+                    {card.icon}
+                  </div>
+                  <div style={{minWidth:0}}>
+                    <p style={{color:"#EAEEF2", fontWeight:"600", fontSize:"13px", margin:"0 0 2px", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis"}}>
+                      {card.label}
+                    </p>
+                    <p style={{color:"#636E7B", fontSize:"11px", margin:0}}>
+                      {card.desc}
+                    </p>
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         )}
 
         {/* ── ALERTS TAB ── */}
         {activeTab === "alerts" && (
-          <div>
+          <div className="fade-in">
             {visibleCross.length === 0 ? (
-              <div className="text-center py-12 text-gray-600">
-                <p className="text-4xl mb-3">✅</p>
-                <p>No cross-family interactions detected</p>
+              <div style={{textAlign:"center", padding:"60px 20px"}}>
+                <div style={{fontSize:"48px", marginBottom:"12px"}}>✅</div>
+                <p style={{color:"#EAEEF2", fontWeight:"600", marginBottom:"4px"}}>All Clear</p>
+                <p style={{color:"#636E7B", fontSize:"13px"}}>No cross-family interactions detected</p>
               </div>
-            ) : (
-              visibleCross.map((alert, i) => (
-                <AlertCard
-                  key={i}
-                  alert={alert}
-                  onDismiss={() => setDismissedCross([...dismissedCross, i])}
-                />
-              ))
-            )}
+            ) : visibleCross.map((alert, i) => (
+              <AlertCard key={i} alert={alert}
+                onDismiss={() => setDismissedCross([...dismissedCross, i])} />
+            ))}
           </div>
         )}
 
         {/* ── MULTI DOCTOR TAB ── */}
         {activeTab === "multi-doctor" && (
-          <div>
-            <p className="text-gray-500 text-sm mb-4">
-              Medicines prescribed to the same person by different doctors that interact dangerously.
+          <div className="fade-in">
+            <p style={{color:"#636E7B", fontSize:"13px", marginBottom:"16px"}}>
+              Medicines from different doctors for the same person that interact dangerously.
             </p>
             {visibleMulti.length === 0 ? (
-              <div className="text-center py-12 text-gray-600">
-                <p className="text-4xl mb-3">✅</p>
-                <p>No multi-doctor conflicts detected</p>
+              <div style={{textAlign:"center", padding:"60px 20px"}}>
+                <div style={{fontSize:"48px", marginBottom:"12px"}}>✅</div>
+                <p style={{color:"#EAEEF2", fontWeight:"600", marginBottom:"4px"}}>All Clear</p>
+                <p style={{color:"#636E7B", fontSize:"13px"}}>No multi-doctor conflicts detected</p>
               </div>
-            ) : (
-              visibleMulti.map((alert, i) => (
-                <MultiDoctorAlert
-                  key={i}
-                  alert={alert}
-                  onDismiss={() => setDismissedMulti([...dismissedMulti, i])}
-                />
-              ))
-            )}
+            ) : visibleMulti.map((alert, i) => (
+              <MultiDoctorAlert key={i} alert={alert}
+                onDismiss={() => setDismissedMulti([...dismissedMulti, i])} />
+            ))}
           </div>
         )}
 
         {/* ── DUPLICATES TAB ── */}
         {activeTab === "duplicates" && (
-          <div>
+          <div className="fade-in">
             {duplicates.length === 0 ? (
-              <div className="text-center py-12 text-gray-600">
-                <p className="text-4xl mb-3">✅</p>
-                <p>No duplicate medicines detected</p>
+              <div style={{textAlign:"center", padding:"60px 20px"}}>
+                <div style={{fontSize:"48px", marginBottom:"12px"}}>✅</div>
+                <p style={{color:"#EAEEF2", fontWeight:"600", marginBottom:"4px"}}>All Clear</p>
+                <p style={{color:"#636E7B", fontSize:"13px"}}>No duplicate medicines detected</p>
               </div>
-            ) : (
-              duplicates.map((dup, i) => (
-                <DuplicateAlert key={i} duplicate={dup} />
-              ))
-            )}
+            ) : duplicates.map((dup, i) => (
+              <DuplicateAlert key={i} duplicate={dup} />
+            ))}
           </div>
         )}
 
         {/* ── MEDICINES TAB ── */}
         {activeTab === "medicines" && (
-          <div className="space-y-4">
-            {family?.members.map(member => (
-              <div
-                key={member.id}
-                className="bg-gray-900 border border-gray-800 rounded-xl p-4 sm:p-5"
-              >
-                <div className="flex items-start justify-between mb-3 gap-2">
-                  <div className="min-w-0">
-                    <h2 className="text-base sm:text-lg font-semibold text-white truncate">
-                      {member.name}
-                    </h2>
-                    <p className="text-sm text-gray-500">Age {member.age}</p>
-                  </div>
-                  <div className="flex items-center gap-2 flex-shrink-0 flex-wrap justify-end">
-                    <span className="text-xl sm:text-2xl font-bold text-green-400">
-                      {member.medicines.length}
-                    </span>
-                    <span className="text-xs text-gray-600">meds</span>
-                    {member.medicines.length > 0 && (
-                      <button
-                        onClick={() => handleClearMedicines(member.id, member.name)}
-                        className="text-xs text-yellow-500 border border-yellow-800 px-2 py-1 rounded-lg"
-                      >
-                        Clear
-                      </button>
-                    )}
-                    <button
-                      onClick={() => handleRemoveMember(member.id, member.name)}
-                      className="text-xs text-red-500 border border-red-800 px-2 py-1 rounded-lg"
-                    >
-                      Remove
-                    </button>
-                  </div>
-                </div>
+          <div className="fade-in" style={{display:"flex", flexDirection:"column", gap:"12px"}}>
+            {family?.members.map(member => {
+              const ms = memberScores.find(s => s.member.id === member.id)
+              return (
+                <div key={member.id} className="med-card">
 
-                {member.medicines.length === 0 ? (
-                  <p className="text-sm text-gray-600 italic">No medicines added yet</p>
-                ) : (
-                  <div className="space-y-2">
-                    {member.medicines.map((med, i) => (
-                      <div
-                        key={i}
-                        className="bg-gray-800 rounded-lg px-3 py-2.5 flex items-start justify-between gap-2"
-                      >
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-start justify-between gap-1 flex-wrap">
-                            <p className="text-sm font-medium text-white">{med.brandName}</p>
-                            <span className="text-xs text-gray-600 font-mono flex-shrink-0">
-                              {med.genericName}
-                            </span>
-                          </div>
-                          <p className="text-xs text-gray-500 mt-0.5">
-                            {med.dose} · {med.frequency}
+                  {/* Member header */}
+                  <div style={{
+                    padding:"16px 16px 12px",
+                    display:"flex", alignItems:"center",
+                    justifyContent:"space-between", gap:"12px",
+                    borderBottom: member.medicines.length > 0 ? "1px solid rgba(255,255,255,0.05)" : "none"
+                  }}>
+                    <div style={{display:"flex", alignItems:"center", gap:"12px", minWidth:0}}>
+                      {/* Avatar */}
+                      <div style={{
+                        width:"40px", height:"40px", borderRadius:"12px",
+                        background: ms?.color === "green" ? "rgba(0,255,136,0.12)" :
+                                    ms?.color === "yellow" ? "rgba(255,214,10,0.12)" :
+                                    ms?.color === "orange" ? "rgba(255,107,53,0.12)" :
+                                    "rgba(204,34,34,0.12)",
+                        border: `1px solid ${ms?.color === "green" ? "rgba(0,255,136,0.2)" :
+                                              ms?.color === "yellow" ? "rgba(255,214,10,0.2)" :
+                                              ms?.color === "orange" ? "rgba(255,107,53,0.2)" :
+                                              "rgba(204,34,34,0.2)"}`,
+                        display:"flex", alignItems:"center", justifyContent:"center",
+                        fontSize:"18px", flexShrink:0
+                      }}>
+                        👤
+                      </div>
+                      <div style={{minWidth:0}}>
+                        <div style={{display:"flex", alignItems:"center", gap:"8px", flexWrap:"wrap"}}>
+                          <p style={{color:"#EAEEF2", fontWeight:"600", fontSize:"14px", margin:0}}>
+                            {member.name}
                           </p>
-                          {med.doctorName && (
-                            <p className="text-xs text-orange-400 mt-0.5">
-                              👨‍⚕️ {med.doctorName}
-                            </p>
+                          {ms && (
+                            <span style={{
+                              fontFamily:"'JetBrains Mono',monospace",
+                              fontSize:"10px", fontWeight:"700",
+                              padding:"2px 8px", borderRadius:"20px",
+                              background: ms.color === "green"  ? "rgba(0,255,136,0.1)"  :
+                                          ms.color === "yellow" ? "rgba(255,214,10,0.1)" :
+                                          ms.color === "orange" ? "rgba(255,107,53,0.1)" :
+                                          "rgba(204,34,34,0.1)",
+                              color: ms.color === "green"  ? "#00FF88" :
+                                     ms.color === "yellow" ? "#FFD60A" :
+                                     ms.color === "orange" ? "#FF6B35" :
+                                     "#FF2D4B",
+                              border: `1px solid ${ms.color === "green"  ? "rgba(0,255,136,0.2)"  :
+                                                    ms.color === "yellow" ? "rgba(255,214,10,0.2)" :
+                                                    ms.color === "orange" ? "rgba(255,107,53,0.2)" :
+                                                    "rgba(204,34,34,0.2)"}`
+                            }}>
+                              {ms.score}/100
+                            </span>
                           )}
                         </div>
-                        <button
-                          onClick={() => handleRemoveMedicine(member.id, i)}
-                          className="text-gray-600 hover:text-red-500 text-xl font-bold flex-shrink-0 w-8 h-8 flex items-center justify-center"
-                        >×</button>
+                        <p style={{color:"#636E7B", fontSize:"12px", margin:"2px 0 0"}}>
+                          Age {member.age} · {member.medicines.length} medicine{member.medicines.length !== 1 ? "s" : ""}
+                        </p>
                       </div>
-                    ))}
+                    </div>
+
+                    {/* Action buttons */}
+                    <div style={{display:"flex", gap:"6px", flexShrink:0}}>
+                      {member.medicines.length > 0 && (
+                        <button onClick={() => handleClearMedicines(member.id, member.name)}
+                          style={{
+                            background:"rgba(255,214,10,0.08)",
+                            border:"1px solid rgba(255,214,10,0.2)",
+                            color:"#FFD60A", borderRadius:"8px",
+                            padding:"5px 10px", fontSize:"11px",
+                            cursor:"pointer", fontWeight:"600",
+                            fontFamily:"'DM Sans',sans-serif"
+                          }}>
+                          Clear
+                        </button>
+                      )}
+                      <button onClick={() => handleRemoveMember(member.id, member.name)}
+                        style={{
+                          background:"rgba(204,34,34,0.08)",
+                          border:"1px solid rgba(204,34,34,0.2)",
+                          color:"#FF5555", borderRadius:"8px",
+                          padding:"5px 10px", fontSize:"11px",
+                          cursor:"pointer", fontWeight:"600",
+                          fontFamily:"'DM Sans',sans-serif"
+                        }}>
+                        Remove
+                      </button>
+                    </div>
                   </div>
-                )}
-              </div>
-            ))}
+
+                  {/* Medicine list */}
+                  {member.medicines.length === 0 ? (
+                    <div style={{padding:"20px 16px", textAlign:"center"}}>
+                      <p style={{color:"#636E7B", fontSize:"13px", fontStyle:"italic"}}>
+                        No medicines added yet
+                      </p>
+                    </div>
+                  ) : (
+                    <div style={{padding:"10px 12px", display:"flex", flexDirection:"column", gap:"6px"}}>
+                      {member.medicines.map((med, i) => (
+                        <div key={i} className="med-item"
+                          style={{padding:"10px 12px", display:"flex", alignItems:"start", gap:"10px"}}>
+                          <div style={{flex:1, minWidth:0}}>
+                            <div style={{display:"flex", alignItems:"center", justifyContent:"space-between", gap:"8px", flexWrap:"wrap"}}>
+                              <p style={{color:"#EAEEF2", fontWeight:"600", fontSize:"13px", margin:0}}>
+                                {med.brandName}
+                              </p>
+                              <span style={{
+                                fontFamily:"'JetBrains Mono',monospace",
+                                fontSize:"10px", color:"#636E7B",
+                                background:"rgba(255,255,255,0.04)",
+                                padding:"2px 8px", borderRadius:"6px",
+                                flexShrink:0
+                              }}>
+                                {med.genericName}
+                              </span>
+                            </div>
+                            <p style={{color:"#636E7B", fontSize:"11px", margin:"4px 0 0"}}>
+                              {med.dose} · {med.frequency}
+                            </p>
+                            {med.doctorName && (
+                              <p style={{color:"rgba(255,107,53,0.8)", fontSize:"11px", margin:"3px 0 0"}}>
+                                👨‍⚕️ {med.doctorName}
+                              </p>
+                            )}
+                          </div>
+                          <button onClick={() => handleRemoveMedicine(member.id, i)}
+                            style={{
+                              background:"none", border:"none",
+                              color:"#636E7B", cursor:"pointer",
+                              fontSize:"18px", fontWeight:"bold",
+                              width:"28px", height:"28px",
+                              display:"flex", alignItems:"center", justifyContent:"center",
+                              borderRadius:"8px", flexShrink:0,
+                              transition:"all 0.2s"
+                            }}
+                            onMouseOver={e => e.target.style.color="#FF5555"}
+                            onMouseOut={e => e.target.style.color="#636E7B"}
+                          >×</button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )
+            })}
           </div>
         )}
 
       </div>
 
       {/* ── MOBILE BOTTOM NAV ── */}
-      <div className="fixed bottom-0 left-0 right-0 sm:hidden bg-gray-950 border-t border-gray-800">
-        <div className="flex">
-          {tabs.map(tab => (
-            <button
-              key={tab}
-              onClick={() => setActiveTab(tab)}
-              className={`flex-1 py-3 text-center transition-colors relative ${
-                activeTab === tab ? "text-red-500" : "text-gray-600"
-              }`}
-            >
-              <div className="text-base">
-                {tab === "overview"     && "🏠"}
-                {tab === "alerts"       && "🚨"}
-                {tab === "multi-doctor" && "👨‍⚕️"}
-                {tab === "duplicates"   && "💊"}
-                {tab === "medicines"    && "📋"}
-              </div>
-              <div className="text-xs mt-0.5 font-medium">
-                {tab === "overview"     && "Home"}
-                {tab === "alerts"       && "Alerts"}
-                {tab === "multi-doctor" && "Doctors"}
-                {tab === "duplicates"   && "Dupes"}
-                {tab === "medicines"    && "Meds"}
-              </div>
-              {tab === "alerts" && visibleCross.length > 0 && (
-                <span className="absolute top-1 right-1 w-4 h-4 bg-red-600 rounded-full text-xs text-white flex items-center justify-center">
-                  {visibleCross.length}
-                </span>
-              )}
-            </button>
-          ))}
-        </div>
+      <div className="mobile-nav" style={{
+        position:"fixed", bottom:0, left:0, right:0,
+        background:"rgba(5,7,10,0.95)",
+        backdropFilter:"blur(20px)",
+        borderTop:"1px solid rgba(255,255,255,0.06)",
+        display:"flex", zIndex:50
+      }}>
+        {[
+          { tab:"overview",     icon:"🏠", label:"Home"    },
+          { tab:"alerts",       icon:"🚨", label:"Alerts"  },
+          { tab:"multi-doctor", icon:"👨‍⚕️", label:"Doctors" },
+          { tab:"duplicates",   icon:"💊", label:"Dupes"   },
+          { tab:"medicines",    icon:"📋", label:"Meds"    },
+        ].map(item => (
+          <button
+            key={item.tab}
+            className="mobile-nav-btn"
+            onClick={() => setActiveTab(item.tab)}
+            style={{color: activeTab === item.tab ? "#CC2222" : "#636E7B"}}
+          >
+            {activeTab === item.tab && (
+              <div style={{
+                position:"absolute", top:0, left:"50%",
+                transform:"translateX(-50%)",
+                width:"32px", height:"2px",
+                background:"#CC2222", borderRadius:"0 0 2px 2px"
+              }}/>
+            )}
+            <div style={{fontSize:"18px"}}>{item.icon}</div>
+            <div style={{
+              fontSize:"10px", fontWeight:"600",
+              marginTop:"3px", letterSpacing:"0.02em"
+            }}>{item.label}</div>
+            {item.tab === "alerts" && visibleCross.length > 0 && (
+              <div style={{
+                position:"absolute", top:"6px", right:"8px",
+                background:"#CC2222", color:"white",
+                width:"14px", height:"14px", borderRadius:"50%",
+                fontSize:"8px", fontWeight:"700",
+                display:"flex", alignItems:"center", justifyContent:"center"
+              }}>{visibleCross.length}</div>
+            )}
+          </button>
+        ))}
       </div>
 
       {/* ── MODALS ── */}
-      {showScanner && (
-        <PrescriptionScanner
-          familyMembers={family?.members || []}
-          onDrugsExtracted={handleDrugsExtracted}
-          onClose={() => setShowScanner(false)}
-        />
-      )}
-      {showSymptom && (
-        <SymptomChecker
-          members={family?.members || []}
-          onClose={() => setShowSymptom(false)}
-        />
-      )}
-      {showReminder && (
-        <RemindersManager
-          members={family?.members || []}
-          onClose={() => setShowReminder(false)}
-        />
-      )}
-      {showComparator && (
-        <MedicineComparator
-          onClose={() => setShowComparator(false)}
-        />
-      )}
-      {showDoctorBrief && family && (
-        <DoctorBrief
-          family={family}
-          onClose={() => setShowDoctorBrief(false)}
-        />
-      )}
+      {showScanner    && <PrescriptionScanner familyMembers={family?.members || []} onDrugsExtracted={handleDrugsExtracted} onClose={() => setShowScanner(false)} />}
+      {showSymptom    && <SymptomChecker      members={family?.members || []}       onClose={() => setShowSymptom(false)} />}
+      {showReminder   && <RemindersManager    members={family?.members || []}       onClose={() => setShowReminder(false)} />}
+      {showComparator && <MedicineComparator                                         onClose={() => setShowComparator(false)} />}
+      {showFoodChecker && <FoodChecker        members={family?.members || []}       onClose={() => setShowFoodChecker(false)} />}
+      {showDoctorBrief && family && <DoctorBrief family={family}                    onClose={() => setShowDoctorBrief(false)} />}
+      {showSafetyScore && family && <SafetyScore members={family.members}           onClose={() => setShowSafetyScore(false)} />}
 
     </div>
   )
