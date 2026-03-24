@@ -1,284 +1,321 @@
 import { useState } from "react"
+import ScoreDial from "./ScoreDial"
 import { calculateFamilyScores, calculateFamilyOverallScore } from "../services/safetyScoreService"
-
-// Circular score dial
-function ScoreDial({ score, color, size = 80 }) {
-  const radius     = (size - 8) / 2
-  const circumference = 2 * Math.PI * radius
-  const progress   = (score / 100) * circumference
-  const strokeColor =
-    color === "green"  ? "#00FF88" :
-    color === "yellow" ? "#FFD60A" :
-    color === "orange" ? "#FF6B35" :
-                         "#FF2D4B"
-
-  return (
-    <svg width={size} height={size} style={{transform:"rotate(-90deg)"}}>
-      {/* Background circle */}
-      <circle
-        cx={size/2} cy={size/2} r={radius}
-        fill="none" stroke="#21262D" strokeWidth={6}
-      />
-      {/* Score arc */}
-      <circle
-        cx={size/2} cy={size/2} r={radius}
-        fill="none"
-        stroke={strokeColor}
-        strokeWidth={6}
-        strokeDasharray={`${progress} ${circumference}`}
-        strokeLinecap="round"
-        style={{transition:"stroke-dasharray 1s ease"}}
-      />
-    </svg>
-  )
-}
 
 export default function SafetyScore({ members, onClose }) {
   const [selectedMember, setSelectedMember] = useState(null)
   const memberScores  = calculateFamilyScores(members)
   const overallScore  = calculateFamilyOverallScore(memberScores)
+  const selectedData  = memberScores.find(ms => ms.member.id === selectedMember)
 
-  const overallColor =
-    overallScore >= 80 ? "green" :
-    overallScore >= 60 ? "yellow" :
-    overallScore >= 40 ? "orange" : "red"
+  const msColor = (color) =>
+    color === "green"  ? "#00FF88" :
+    color === "yellow" ? "#FFD60A" :
+    color === "orange" ? "#FF6B35" : "#FF2D4B"
 
-  const overallStatus =
-    overallScore >= 80 ? "FAMILY SAFE" :
-    overallScore >= 60 ? "MODERATE RISK" :
-    overallScore >= 40 ? "AT RISK" : "DANGER"
+  const msBg = (color) =>
+    color === "green"  ? "rgba(0,255,136,0.08)"  :
+    color === "yellow" ? "rgba(255,214,10,0.08)"  :
+    color === "orange" ? "rgba(255,107,53,0.08)"  :
+                         "rgba(255,45,75,0.08)"
 
-  const selectedData = selectedMember
-    ? memberScores.find(ms => ms.member.id === selectedMember)
-    : null
+  const msBorder = (color) =>
+    color === "green"  ? "rgba(0,255,136,0.2)"  :
+    color === "yellow" ? "rgba(255,214,10,0.2)"  :
+    color === "orange" ? "rgba(255,107,53,0.2)"  :
+                         "rgba(255,45,75,0.2)"
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-80 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4">
-      <div className="bg-gray-900 rounded-t-2xl sm:rounded-2xl w-full sm:max-w-lg border border-gray-700 max-h-[90vh] overflow-y-auto">
+    <div style={{
+      position:"fixed", inset:0,
+      background:"rgba(0,0,0,0.85)",
+      backdropFilter:"blur(8px)",
+      display:"flex",
+      alignItems:"flex-end",
+      justifyContent:"center",
+      zIndex:50,
+      padding:"0"
+    }}>
+      <style>{`
+        @media(min-width:640px){
+          .ss-modal {
+            align-self: center !important;
+            border-radius: 20px !important;
+            max-width: 480px !important;
+          }
+        }
+        .reason-row {
+          display:flex; align-items:flex-start; gap:10px;
+          padding:10px 12px; border-radius:10px;
+          margin-bottom:6px;
+          transition: all 0.2s;
+        }
+        .reason-row:hover { filter: brightness(1.1); }
+      `}</style>
+
+      <div className="ss-modal" style={{
+        background:"rgba(9,12,16,0.98)",
+        border:"1px solid rgba(255,255,255,0.08)",
+        borderRadius:"20px 20px 0 0",
+        width:"100%",
+        maxHeight:"90vh",
+        overflowY:"auto",
+        fontFamily:"'DM Sans',sans-serif"
+      }}>
 
         {/* Header */}
-        <div className="flex items-center justify-between p-5 border-b border-gray-800">
+        <div style={{
+          display:"flex", alignItems:"center", justifyContent:"space-between",
+          padding:"20px 20px 0",
+          position:"sticky", top:0,
+          background:"rgba(9,12,16,0.98)",
+          zIndex:1
+        }}>
           <div>
-            <h2 className="text-lg font-bold text-white">🛡️ Safety Score</h2>
-            <p className="text-gray-500 text-xs mt-1">
+            <h2 style={{
+              fontFamily:"'Bebas Neue',sans-serif",
+              fontSize:"28px", letterSpacing:"0.06em",
+              color:"#EAEEF2", margin:0
+            }}>🛡️ Safety Scores</h2>
+            <p style={{color:"#636E7B", fontSize:"12px", margin:"2px 0 0"}}>
               Medicine safety rating for each family member
             </p>
           </div>
-          <button onClick={onClose} className="text-gray-500 hover:text-white text-2xl">×</button>
+          <button onClick={onClose} style={{
+            background:"rgba(255,255,255,0.06)",
+            border:"1px solid rgba(255,255,255,0.1)",
+            color:"#EAEEF2", borderRadius:"10px",
+            width:"36px", height:"36px",
+            fontSize:"18px", cursor:"pointer",
+            display:"flex", alignItems:"center", justifyContent:"center"
+          }}>×</button>
         </div>
 
-        <div className="p-5">
+        <div style={{padding:"20px"}}>
 
-          {/* Overall Family Score */}
-          <div className={`rounded-2xl border p-5 mb-5 text-center ${
-            overallColor === "green"  ? "bg-green-950  border-green-700" :
-            overallColor === "yellow" ? "bg-yellow-950 border-yellow-700" :
-            overallColor === "orange" ? "bg-orange-950 border-orange-700" :
-                                        "bg-red-950    border-red-700"
-          }`}>
-            <p className="text-xs font-mono tracking-widest text-gray-400 mb-3">
-              OVERALL FAMILY SAFETY SCORE
+          {/* Overall score */}
+          <div style={{
+            background:"rgba(255,255,255,0.03)",
+            border:"1px solid rgba(255,255,255,0.07)",
+            borderRadius:"16px", padding:"24px",
+            display:"flex", flexDirection:"column",
+            alignItems:"center", gap:"12px",
+            marginBottom:"20px"
+          }}>
+            <p style={{
+              fontFamily:"'JetBrains Mono',monospace",
+              fontSize:"9px", letterSpacing:"0.25em",
+              color:"#636E7B", textTransform:"uppercase", margin:0
+            }}>Overall Family Score</p>
+            <ScoreDial
+              score={overallScore}
+              size={140}
+              strokeWidth={10}
+              animate={true}
+            />
+            <p style={{
+              color:"#636E7B", fontSize:"13px", margin:0, textAlign:"center"
+            }}>
+              {members.length} members · {members.reduce((s,m) => s + m.medicines.length, 0)} medicines
             </p>
-            <div className="flex items-center justify-center gap-4">
-              <div className="relative">
-                <ScoreDial score={overallScore} color={overallColor} size={100} />
-                <div className="absolute inset-0 flex items-center justify-center flex-col">
-                  <span className="text-2xl font-bold text-white"
-                        style={{fontFamily:"'Bebas Neue',sans-serif"}}>
-                    {overallScore}
-                  </span>
-                  <span className="text-xs text-gray-400">/100</span>
-                </div>
-              </div>
-              <div className="text-left">
-                <p className={`text-2xl font-bold mb-1 ${
-                  overallColor === "green"  ? "text-green-400" :
-                  overallColor === "yellow" ? "text-yellow-400" :
-                  overallColor === "orange" ? "text-orange-400" :
-                                              "text-red-400"
-                }`} style={{fontFamily:"'Bebas Neue',sans-serif"}}>
-                  {overallStatus}
-                </p>
-                <p className="text-gray-400 text-sm">
-                  {members.length} members · {members.reduce((s,m) => s + m.medicines.length, 0)} medicines
-                </p>
-              </div>
-            </div>
           </div>
 
-          {/* Individual Member Scores */}
-          <p className="text-xs text-gray-500 mb-3 font-mono tracking-widest">
-            MEMBER SCORES
-          </p>
-          <div className="space-y-3 mb-5">
+          {/* Member dials */}
+          <div style={{
+            display:"flex", gap:"12px",
+            justifyContent:"center", flexWrap:"wrap",
+            marginBottom:"20px"
+          }}>
             {memberScores.map(ms => (
               <div
                 key={ms.member.id}
                 onClick={() => setSelectedMember(
                   selectedMember === ms.member.id ? null : ms.member.id
                 )}
-                className={`bg-gray-800 border rounded-xl p-4 cursor-pointer transition-all ${
-                  selectedMember === ms.member.id
-                    ? "border-red-600"
-                    : "border-gray-700 hover:border-gray-600"
-                }`}
+                style={{
+                  background: selectedMember === ms.member.id
+                    ? msBg(ms.color)
+                    : "rgba(255,255,255,0.03)",
+                  border:`1px solid ${selectedMember === ms.member.id
+                    ? msBorder(ms.color)
+                    : "rgba(255,255,255,0.07)"}`,
+                  borderRadius:"14px", padding:"16px",
+                  cursor:"pointer", textAlign:"center",
+                  transition:"all 0.25s",
+                  minWidth:"100px"
+                }}
               >
-                <div className="flex items-center gap-3">
-
-                  {/* Mini dial */}
-                  <div className="relative flex-shrink-0">
-                    <ScoreDial score={ms.score} color={ms.color} size={56} />
-                    <div className="absolute inset-0 flex items-center justify-center">
-                      <span className="text-sm font-bold text-white"
-                            style={{fontFamily:"'Bebas Neue',sans-serif"}}>
-                        {ms.score}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Member info */}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between gap-2">
-                      <p className="text-white font-semibold text-sm">{ms.member.name}</p>
-                      <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
-                        ms.color === "green"  ? "bg-green-950  text-green-400" :
-                        ms.color === "yellow" ? "bg-yellow-950 text-yellow-400" :
-                        ms.color === "orange" ? "bg-orange-950 text-orange-400" :
-                                                "bg-red-950    text-red-400"
-                      }`}>
-                        {ms.emoji} {ms.status}
-                      </span>
-                    </div>
-                    <p className="text-gray-500 text-xs mt-0.5">
-                      Age {ms.member.age} · {ms.member.medicines.length} medicines
-                    </p>
-
-                    {/* Score bar */}
-                    <div className="w-full bg-gray-700 rounded-full h-1.5 mt-2">
-                      <div
-                        className={`h-1.5 rounded-full transition-all duration-700 ${
-                          ms.color === "green"  ? "bg-green-400" :
-                          ms.color === "yellow" ? "bg-yellow-400" :
-                          ms.color === "orange" ? "bg-orange-400" :
-                                                   "bg-red-400"
-                        }`}
-                        style={{width:`${ms.score}%`}}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="text-gray-600 text-sm flex-shrink-0">
-                    {selectedMember === ms.member.id ? "▲" : "▼"}
-                  </div>
-                </div>
-
-                {/* Expanded reasons */}
-                {selectedMember === ms.member.id && (
-                  <div className="mt-4 pt-4 border-t border-gray-700">
-                    {ms.reasons.length === 0 ? (
-                      <div className="flex items-center gap-2 text-green-400">
-                        <span>✅</span>
-                        <p className="text-sm">No risk factors detected. Score is 100/100.</p>
-                      </div>
-                    ) : (
-                      <div>
-                        <p className="text-xs text-gray-500 mb-3 font-mono tracking-widest">
-                          RISK FACTORS
-                        </p>
-                        <div className="space-y-2">
-                          {ms.reasons.map((reason, i) => (
-                            <div key={i} className={`rounded-lg px-3 py-2.5 flex items-start gap-2 ${
-                              reason.severity === "HIGH"   ? "bg-red-950    border border-red-900" :
-                              reason.severity === "MEDIUM" ? "bg-yellow-950 border border-yellow-900" :
-                              reason.severity === "LOW"    ? "bg-blue-950   border border-blue-900" :
-                                                             "bg-gray-800   border border-gray-700"
-                            }`}>
-                              <span className="text-sm flex-shrink-0">
-                                {reason.type === "interaction"      && "⚡"}
-                                {reason.type === "self_interaction"  && "🔄"}
-                                {reason.type === "duplicate"        && "💊"}
-                                {reason.type === "missing_info"     && "ℹ️"}
-                                {reason.type === "polypharmacy"     && "⚠️"}
-                              </span>
-                              <div className="flex-1 min-w-0">
-                                <p className="text-gray-200 text-xs leading-5">{reason.text}</p>
-                              </div>
-                              <span className={`text-xs font-bold flex-shrink-0 ${
-                                reason.severity === "HIGH"   ? "text-red-400" :
-                                reason.severity === "MEDIUM" ? "text-yellow-400" :
-                                                               "text-blue-400"
-                              }`}>
-                                -{reason.deduction}
-                              </span>
-                            </div>
-                          ))}
-                        </div>
-
-                        {/* Score breakdown */}
-                        <div className="mt-3 bg-gray-900 rounded-lg p-3">
-                          <p className="text-xs text-gray-500 mb-2 font-mono tracking-widest">
-                            SCORE BREAKDOWN
-                          </p>
-                          <div className="flex items-center justify-between text-xs">
-                            <span className="text-gray-400">Starting score</span>
-                            <span className="text-white font-bold">100</span>
-                          </div>
-                          {ms.reasons.map((reason, i) => (
-                            <div key={i} className="flex items-center justify-between text-xs mt-1">
-                              <span className="text-gray-500 truncate mr-2">
-                                {reason.type === "interaction"     && "Cross-family interaction"}
-                                {reason.type === "self_interaction" && "Self interaction"}
-                                {reason.type === "duplicate"       && "Duplicate medicine"}
-                                {reason.type === "missing_info"    && "Missing doctor info"}
-                                {reason.type === "polypharmacy"    && "Too many medicines"}
-                              </span>
-                              <span className="text-red-400 font-bold flex-shrink-0">
-                                -{reason.deduction}
-                              </span>
-                            </div>
-                          ))}
-                          <div className="flex items-center justify-between text-xs mt-2 pt-2 border-t border-gray-700">
-                            <span className="text-white font-bold">Final Score</span>
-                            <span className={`font-bold text-sm ${
-                              ms.color === "green"  ? "text-green-400" :
-                              ms.color === "yellow" ? "text-yellow-400" :
-                              ms.color === "orange" ? "text-orange-400" :
-                                                       "text-red-400"
-                            }`}>{ms.score}/100</span>
-                          </div>
-                        </div>
-
-                      </div>
-                    )}
-                  </div>
-                )}
-
+                <ScoreDial
+                  score={ms.score}
+                  size={80}
+                  strokeWidth={6}
+                  animate={true}
+                />
+                <p style={{
+                  color:"#EAEEF2", fontWeight:"600",
+                  fontSize:"12px", margin:"8px 0 2px"
+                }}>{ms.member.name}</p>
+                <p style={{color:"#636E7B", fontSize:"10px", margin:0}}>
+                  Age {ms.member.age}
+                </p>
+                <p style={{
+                  color:"#636E7B", fontSize:"10px",
+                  margin:"4px 0 0"
+                }}>
+                  {selectedMember === ms.member.id ? "▲ Hide" : "▼ Details"}
+                </p>
               </div>
             ))}
           </div>
 
-          {/* How scores work */}
-          <div className="bg-gray-800 rounded-xl p-4">
-            <p className="text-xs text-gray-500 mb-3 font-mono tracking-widest">
-              HOW SCORES ARE CALCULATED
-            </p>
-            <div className="space-y-1.5">
+          {/* Expanded member details */}
+          {selectedData && (
+            <div style={{
+              background:"rgba(255,255,255,0.03)",
+              border:"1px solid rgba(255,255,255,0.07)",
+              borderRadius:"16px", padding:"16px",
+              marginBottom:"20px",
+              animation:"fadeIn 0.3s ease"
+            }}>
+              <style>{`@keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}`}</style>
+              <p style={{
+                fontFamily:"'JetBrains Mono',monospace",
+                fontSize:"9px", letterSpacing:"0.2em",
+                color:"#636E7B", textTransform:"uppercase",
+                margin:"0 0 12px"
+              }}>Risk Factors — {selectedData.member.name}</p>
+
+              {selectedData.reasons.length === 0 ? (
+                <div style={{
+                  display:"flex", alignItems:"center", gap:"10px",
+                  color:"#00CC66", padding:"12px"
+                }}>
+                  <span>✅</span>
+                  <p style={{margin:0, fontSize:"13px"}}>
+                    No risk factors. Score is perfect 100/100.
+                  </p>
+                </div>
+              ) : (
+                <>
+                  {selectedData.reasons.map((reason, i) => (
+                    <div key={i} className="reason-row" style={{
+                      background:
+                        reason.severity === "HIGH"   ? "rgba(204,34,34,0.1)"    :
+                        reason.severity === "MEDIUM" ? "rgba(255,214,10,0.08)"  :
+                                                       "rgba(0,212,255,0.08)",
+                      border:`1px solid ${
+                        reason.severity === "HIGH"   ? "rgba(204,34,34,0.2)"    :
+                        reason.severity === "MEDIUM" ? "rgba(255,214,10,0.15)"  :
+                                                       "rgba(0,212,255,0.15)"}`
+                    }}>
+                      <span style={{fontSize:"16px", flexShrink:0}}>
+                        {reason.type === "interaction"      && "⚡"}
+                        {reason.type === "self_interaction"  && "🔄"}
+                        {reason.type === "duplicate"        && "💊"}
+                        {reason.type === "missing_info"     && "ℹ️"}
+                        {reason.type === "polypharmacy"     && "⚠️"}
+                      </span>
+                      <p style={{
+                        flex:1, color:"#EAEEF2",
+                        fontSize:"12px", margin:0, lineHeight:"1.5"
+                      }}>{reason.text}</p>
+                      <span style={{
+                        color:
+                          reason.severity === "HIGH"   ? "#FF5555" :
+                          reason.severity === "MEDIUM" ? "#FFD60A" : "#00D4FF",
+                        fontWeight:"700", fontSize:"12px",
+                        flexShrink:0,
+                        fontFamily:"'JetBrains Mono',monospace"
+                      }}>-{reason.deduction}</span>
+                    </div>
+                  ))}
+
+                  {/* Breakdown */}
+                  <div style={{
+                    background:"rgba(0,0,0,0.3)",
+                    borderRadius:"10px", padding:"12px",
+                    marginTop:"8px"
+                  }}>
+                    <p style={{
+                      fontFamily:"'JetBrains Mono',monospace",
+                      fontSize:"9px", letterSpacing:"0.2em",
+                      color:"#636E7B", textTransform:"uppercase",
+                      margin:"0 0 8px"
+                    }}>Score Breakdown</p>
+                    <div style={{display:"flex", justifyContent:"space-between", marginBottom:"4px"}}>
+                      <span style={{color:"#636E7B", fontSize:"12px"}}>Starting score</span>
+                      <span style={{color:"#EAEEF2", fontWeight:"700", fontSize:"12px"}}>100</span>
+                    </div>
+                    {selectedData.reasons.map((r, i) => (
+                      <div key={i} style={{display:"flex", justifyContent:"space-between", marginBottom:"3px"}}>
+                        <span style={{color:"#636E7B", fontSize:"11px"}}>
+                          {r.type === "interaction"     && "Cross-family interaction"}
+                          {r.type === "self_interaction" && "Self interaction"}
+                          {r.type === "duplicate"       && "Duplicate medicine"}
+                          {r.type === "missing_info"    && "Missing doctor info"}
+                          {r.type === "polypharmacy"    && "Too many medicines"}
+                        </span>
+                        <span style={{color:"#FF5555", fontWeight:"700", fontSize:"11px",
+                          fontFamily:"'JetBrains Mono',monospace"}}>
+                          -{r.deduction}
+                        </span>
+                      </div>
+                    ))}
+                    <div style={{
+                      display:"flex", justifyContent:"space-between",
+                      paddingTop:"8px", marginTop:"4px",
+                      borderTop:"1px solid rgba(255,255,255,0.06)"
+                    }}>
+                      <span style={{color:"#EAEEF2", fontWeight:"700", fontSize:"13px"}}>Final Score</span>
+                      <span style={{
+                        color:msColor(selectedData.color),
+                        fontWeight:"700", fontSize:"14px",
+                        fontFamily:"'Bebas Neue',sans-serif",
+                        letterSpacing:"0.04em"
+                      }}>{selectedData.score}/100</span>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
+          {/* Legend */}
+          <div style={{
+            background:"rgba(255,255,255,0.03)",
+            border:"1px solid rgba(255,255,255,0.06)",
+            borderRadius:"14px", padding:"14px"
+          }}>
+            <p style={{
+              fontFamily:"'JetBrains Mono',monospace",
+              fontSize:"9px", letterSpacing:"0.2em",
+              color:"#636E7B", textTransform:"uppercase",
+              margin:"0 0 10px"
+            }}>Score Guide</p>
+            <div style={{display:"flex", flexDirection:"column", gap:"6px"}}>
               {[
-                ["HIGH risk interaction",        "-25 points", "red"],
-                ["MEDIUM risk interaction",       "-15 points", "yellow"],
-                ["Self interaction (same person)","-20 points", "orange"],
-                ["Duplicate molecule detected",   "-20 points", "orange"],
-                ["Medicine without doctor info",  "-5 points",  "blue"],
-                ["More than 5 medicines taken",   "-10 points", "yellow"],
-              ].map(([label, points, color], i) => (
-                <div key={i} className="flex items-center justify-between">
-                  <p className="text-gray-400 text-xs">{label}</p>
-                  <span className={`text-xs font-bold ${
-                    color === "red"    ? "text-red-400" :
-                    color === "yellow" ? "text-yellow-400" :
-                    color === "orange" ? "text-orange-400" :
-                                         "text-blue-400"
-                  }`}>{points}</span>
+                ["80 – 100", "Safe",     "#00FF88"],
+                ["60 – 79",  "Moderate", "#FFD60A"],
+                ["40 – 59",  "At Risk",  "#FF6B35"],
+                ["0 – 39",   "Danger",   "#FF2D4B"],
+              ].map(([range, label, color]) => (
+                <div key={range} style={{
+                  display:"flex", alignItems:"center",
+                  justifyContent:"space-between"
+                }}>
+                  <div style={{display:"flex", alignItems:"center", gap:"8px"}}>
+                    <div style={{
+                      width:"10px", height:"10px", borderRadius:"50%",
+                      background:color,
+                      boxShadow:`0 0 6px ${color}`
+                    }}/>
+                    <span style={{color:"#636E7B", fontSize:"12px"}}>{label}</span>
+                  </div>
+                  <span style={{
+                    color:color,
+                    fontFamily:"'JetBrains Mono',monospace",
+                    fontSize:"11px"
+                  }}>{range}</span>
                 </div>
               ))}
             </div>

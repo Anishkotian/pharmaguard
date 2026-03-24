@@ -1,26 +1,38 @@
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
+import SplashScreen from "./components/SplashScreen"
 import LandingPage from "./pages/LandingPage"
 import FamilySetup from "./pages/FamilySetup"
 import Dashboard from "./pages/Dashboard"
 import { restoreReminders } from "./services/reminderScheduler"
 
 export default function App() {
-  const [screen, setScreen]   = useState("landing")
+  const [screen, setScreen]     = useState("splash")
   const [familyId, setFamilyId] = useState(null)
   const [checking, setChecking] = useState(true)
+  const initialized             = useRef(false)
 
   useEffect(() => {
+    if (initialized.current) return
+    initialized.current = true
+
     const saved = localStorage.getItem("pharmaguard_family_id")
-    if (saved) {
-      setFamilyId(saved)
-      setScreen("dashboard")
-    }
+    if (saved) setFamilyId(saved)
     setChecking(false)
     restoreReminders()
   }, [])
 
+  const handleSplashDone = () => {
+    const saved = localStorage.getItem("pharmaguard_family_id")
+    if (saved) {
+      setScreen("dashboard")
+    } else {
+      setScreen("landing")
+    }
+  }
+
   const handleGetStarted = () => {
-    if (familyId) {
+    const saved = localStorage.getItem("pharmaguard_family_id")
+    if (saved) {
       setScreen("dashboard")
     } else {
       setScreen("setup")
@@ -28,16 +40,13 @@ export default function App() {
   }
 
   const handleReset = () => {
+    localStorage.removeItem("pharmaguard_family_id")
     setFamilyId(null)
     setScreen("landing")
   }
 
-  if (checking) {
-    return (
-      <div style={{minHeight:"100vh",background:"#05070A",display:"flex",alignItems:"center",justifyContent:"center"}}>
-        <p style={{color:"#636E7B"}}>Loading...</p>
-      </div>
-    )
+  if (screen === "splash") {
+    return <SplashScreen onComplete={handleSplashDone} />
   }
 
   if (screen === "landing") {
@@ -55,5 +64,10 @@ export default function App() {
     )
   }
 
-  return <Dashboard familyId={familyId} onReset={handleReset} />
+  return (
+    <Dashboard
+      familyId={familyId || localStorage.getItem("pharmaguard_family_id")}
+      onReset={handleReset}
+    />
+  )
 }
