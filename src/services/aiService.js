@@ -1,10 +1,8 @@
+const API_KEY = import.meta.env.VITE_GEMINI_API_KEY
 
-const API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
-
-// ── Models available on this key ─────────────────────────────────
+// ── Models ordered by what works on your key ─────────────────────
+// gemini-2.5-flash-lite works ✅ — put it first
 const MODELS = [
-  "gemini-2.0-flash-lite",
-  "gemini-2.0-flash-lite-001",
   "gemini-2.5-flash-lite",
   "gemini-2.5-flash",
   "gemini-2.0-flash-001",
@@ -12,7 +10,7 @@ const MODELS = [
 ]
 
 const VISION_MODELS = [
-  "gemini-2.0-flash-lite",
+  "gemini-2.5-flash-lite",
   "gemini-2.5-flash",
   "gemini-2.0-flash-001",
 ]
@@ -30,11 +28,7 @@ const callGemini = async (prompt) => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: {
-            temperature: 0.7,
-            maxOutputTokens: 800,
-            thinkingConfig: { thinkingBudget: 0 }
-          }
+          generationConfig: { temperature: 0.7, maxOutputTokens: 800 }
         })
       })
 
@@ -42,7 +36,7 @@ const callGemini = async (prompt) => {
 
       if (data.error) {
         const code = data.error.code
-        console.log(`⚠️ ${model} → ${code}: ${data.error.message?.substring(0,80)}`)
+        console.log(`⚠️ ${model} → ${code}`)
         if (code === 429 || code === 404 || code === 400 || code === 503) {
           lastError = new Error(data.error.message)
           continue
@@ -52,7 +46,7 @@ const callGemini = async (prompt) => {
 
       const text = data.candidates?.[0]?.content?.parts?.[0]?.text
       if (text) {
-        console.log(`✅ Gemini responding via: ${model}`)
+        console.log(`✅ AI via: ${model}`)
         return text
       }
     } catch (err) {
@@ -61,7 +55,7 @@ const callGemini = async (prompt) => {
     }
   }
 
-  console.error("All models failed:", lastError?.message)
+  console.warn("All AI models exhausted — using fallback")
   return null
 }
 
@@ -76,38 +70,33 @@ const callGeminiVision = async (imageBase64, prompt) => {
         body: JSON.stringify({
           contents: [{
             parts: [
-              { inline_data: { mime_type: "image/jpeg", data: imageBase64 } },
+              { inline_data: { mime_type:"image/jpeg", data:imageBase64 } },
               { text: prompt }
             ]
           }],
           generationConfig: { temperature: 0.1, maxOutputTokens: 1024 }
         })
       })
-
       const data = await res.json()
       if (data.error?.code === 429 || data.error?.code === 404) continue
       if (data.error) throw new Error(data.error.message)
-
       const text = data.candidates?.[0]?.content?.parts?.[0]?.text
-      if (text) {
-        console.log(`✅ Vision via: ${model}`)
-        return text
-      }
+      if (text) { console.log(`✅ Vision via: ${model}`); return text }
     } catch { continue }
   }
   return "[]"
 }
 
-// ── Fallback responses when AI unavailable ────────────────────────
+// ── Fallbacks ─────────────────────────────────────────────────────
 const FALLBACKS = {
   chatbot: (q) =>
-    `I cannot connect to AI right now. For your question about "${q}", please consult your doctor or pharmacist. You can also check the Issues tab for automated drug interaction checks.`,
+    `I cannot reach the AI right now. For your question about "${q}", please consult your doctor or pharmacist. You can also check the Issues tab for automated drug interaction checks.`,
   symptom: () =>
-    `LIKELY CAUSE: Cannot determine — AI unavailable\nCONFIDENCE: Low\nEXPLANATION: AI service is currently unavailable. Check the Issues tab for automated checks.\nTIMING: Unknown\nACTION: Consult your doctor if the symptom persists.`,
+    `LIKELY CAUSE: Cannot determine — AI unavailable\nCONFIDENCE: Low\nEXPLANATION: AI service is unavailable right now. Check the Issues tab for automated checks.\nTIMING: Unknown\nACTION: Consult your doctor if the symptom persists.`,
   summary: (name, meds, issues) =>
-    `${name} has ${meds} medicines tracked. ${issues > 0 ? `${issues} safety issue${issues > 1 ? "s" : ""} found — check the Issues tab.` : "No safety issues detected."} Keep your medicine list updated by scanning new prescriptions.`,
+    `${name} has ${meds} medicine${meds !== 1 ? "s" : ""} tracked across all members. ${issues > 0 ? `${issues} safety issue${issues > 1 ? "s" : ""} detected — please check the Issues tab immediately.` : "No safety issues detected — all medicines appear safe together."} Keep your medicine list updated by scanning new prescriptions regularly.`,
   interaction: (a) =>
-    `${a.med1} and ${a.med2} have a ${a.severity} risk interaction. ${a.effect} Please consult your doctor.`,
+    `${a.med1} and ${a.med2} have a ${a.severity} risk interaction. ${a.effect} Please consult your doctor before continuing both medicines.`,
 }
 
 // ── 1. AI CHATBOT ─────────────────────────────────────────────────
@@ -160,14 +149,16 @@ export const aiSymptomDiagnosis = async (symptomDescription, family) => {
 SYMPTOM: "${symptomDescription}"
 
 MEDICINES:
-${allMedicines.map(m => `${m.member}: ${m.brand} (${m.generic}) ${m.dose} started ${m.started}`).join("\n")}
+${allMedicines.map(m =>
+  `${m.member}: ${m.brand} (${m.generic}) ${m.dose} started ${m.started}`
+).join("\n")}
 
-Reply in EXACTLY this format, no extra text:
+Reply in EXACTLY this format:
 LIKELY CAUSE: [medicine name or Cannot determine]
 CONFIDENCE: [High or Medium or Low]
-EXPLANATION: [2-3 sentences why this medicine causes the symptom]
-TIMING: [Does the timing match when symptoms started?]
-ACTION: [What should the patient do?]`
+EXPLANATION: [2-3 sentences why]
+TIMING: [Does timing match?]
+ACTION: [What should patient do?]`
 
   const result = await callGemini(prompt)
   return result || FALLBACKS.symptom()
@@ -175,7 +166,7 @@ ACTION: [What should the patient do?]`
 
 // ── 3. AI INTERACTION EXPLAINER ───────────────────────────────────
 export const explainInteraction = async (alert) => {
-  const prompt = `Explain this drug interaction in simple language for a patient:
+  const prompt = `Explain this drug interaction simply for a patient:
 
 Drug 1: ${alert.med1} taken by ${alert.member1}
 Drug 2: ${alert.med2} taken by ${alert.member2}
@@ -183,11 +174,9 @@ Severity: ${alert.severity}
 Description: ${alert.effect}
 
 Write exactly 3 sentences:
-1. What happens to the body in simple words
-2. Why it is dangerous
-3. One clear immediate action to take
-
-No jargon. Simple language. Be direct.`
+1. What happens to the body simply
+2. Why dangerous
+3. One clear action to take now`
 
   const result = await callGemini(prompt)
   return result || FALLBACKS.interaction(alert)
@@ -197,9 +186,9 @@ No jargon. Simple language. Be direct.`
 export const scanPrescriptionWithAI = async (imageBase64) => {
   try {
     const prompt = `Extract all medicines from this prescription image.
-Return ONLY a valid JSON array, no markdown, no other text whatsoever:
+Return ONLY a valid JSON array, no markdown, no other text:
 [{"brandName":"name","genericName":"generic or unknown","dose":"dose","frequency":"frequency","duration":"unknown","doctorName":"doctor or unknown","condition":"unknown"}]
-If unreadable or no medicines found return exactly: []`
+If unreadable return: []`
 
     const text = await callGeminiVision(imageBase64, prompt)
     const clean = text.replace(/```json|```/g, "").trim()
@@ -226,10 +215,10 @@ Duplicates: ${duplicates.length}
 
 Write exactly 3 sentences:
 1. Overall safety status
-2. Most important concern or positive note if all clear
+2. Most important concern or positive note
 3. One actionable recommendation
 
-Warm encouraging tone. Simple language. No jargon.`
+Warm encouraging tone. Simple language.`
 
   const result = await callGemini(prompt)
   return result || FALLBACKS.summary(family.familyName, totalMeds, alerts.length + duplicates.length)
